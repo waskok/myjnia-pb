@@ -1,13 +1,232 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ==========================================
+// WARSTWA BIZNESOWA
+// ==========================================
+
+model Owner {
+  id             Int             @id @default(autoincrement())
+  firstName      String
+  lastName       String
+  login          String          @unique
+  password       String
+  employees      Employee[]
+  fuelDeliveries FuelDelivery[]  
+}
+
+model Employee {
+  id        Int           @id @default(autoincrement())
+  ownerId   Int
+  firstName String
+  lastName  String
+  role      String
+  login     String        @unique
+  password  String
+  phone     String?       
+  email     String?       
+  owner     Owner         @relation(fields: [ownerId], references: [id])
+  transactions Transaction[]
+}
+
+model Customer {
+  id                 Int                 @id @default(autoincrement())
+  firstName          String
+  lastName           String
+  address            String
+  phone              String
+  email              String
+  registered         Boolean             @default(false)
+  loyaltyPoints      Int                 @default(0)
+  
+  individualCustomer IndividualCustomer?
+  companyCustomer    CompanyCustomer?
+  reservations       Reservation[]
+  transactions       Transaction[]
+  invoices           Invoice[]
+}
+
+model IndividualCustomer {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @unique
+  pesel      String
+  nip        String?  
+  customer   Customer @relation(fields: [customerId], references: [id])
+}
+
+model CompanyCustomer {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @unique
+  nip        String
+  regon      String
+  customer   Customer @relation(fields: [customerId], references: [id])
+}
+
+model LoyaltyProgram {
+  id                    Int @id @default(autoincrement())
+  pointsPerE95          Int
+  pointsPerE98          Int
+  pointsPerDiesel       Int
+  pointsPerLpg          Int
+  pointsPerStandardWash Int
+  pointsPerWaxWash      Int
+}
+
+// ==========================================
+// WARSTWA USŁUGOWA (SPRZEDAŻ, MYJNIA, PALIWA)
+// ==========================================
+
+model Fuel {
+  id             Int             @id @default(autoincrement())
+  type           String
+  pricePerLiter  Float
+  tankLevel      Float
+  maxLevel       Float
+  dispensers     DispenserFuel[]
+  fuelDeliveries FuelDelivery[]  
+}
+
+model FuelDelivery {
+  id           Int      @id @default(autoincrement())
+  fuelId       Int
+  ownerId      Int
+  quantity     Float
+  deliveryDate DateTime
+  status       String
+  supplier     String
+  fuel         Fuel     @relation(fields: [fuelId], references: [id])
+  owner        Owner    @relation(fields: [ownerId], references: [id])
+}
+
+model FuelDispenser {
+  id     Int             @id @default(autoincrement())
+  number Int
+  fuels  DispenserFuel[]
+}
+
+model DispenserFuel {
+  dispenserId Int
+  fuelId      Int
+  dispenser   FuelDispenser @relation(fields: [dispenserId], references: [id])
+  fuel        Fuel          @relation(fields: [fuelId], references: [id])
+
+  @@id([dispenserId, fuelId])
+}
+
+model LpgStation {
+  id          Int   @id @default(autoincrement())
+  lpgLevel    Float
+  pressure    Float
+  temperature Float
+}
+
+model CarWash {
+  id           Int           @id @default(autoincrement())
+  slots        Int
+  washServices WashService[]
+  monitorings  Monitoring[]
+}
+
+model WashService {
+  id            Int           @id @default(autoincrement())
+  carWashId     Int
+  type          String
+  price         Float
+  loyaltyPoints Int
+  carWash       CarWash       @relation(fields: [carWashId], references: [id])
+  reservations  Reservation[]
+}
+
+model Reservation {
+  id            Int         @id @default(autoincrement())
+  customerId    Int
+  washServiceId Int
+  date          DateTime
+  status        String
+  customer      Customer    @relation(fields: [customerId], references: [id])
+  washService   WashService @relation(fields: [washServiceId], references: [id])
+}
+
+model Transaction {
+  id            Int               @id @default(autoincrement())
+  customerId    Int?
+  employeeId    Int
+  date          DateTime          @default(now())
+  totalAmount   Float
+  paymentMethod String
+  customer      Customer?         @relation(fields: [customerId], references: [id])
+  employee      Employee          @relation(fields: [employeeId], references: [id])
+  items         TransactionItem[]
+  invoices      Invoice[]
+}
+
+model TransactionItem {
+  id            Int         @id @default(autoincrement())
+  transactionId Int
+  product       String
+  quantity      Float
+  unitPrice     Float
+  value         Float
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+}
+
+model Invoice {
+  id            Int         @id @default(autoincrement())
+  customerId    Int
+  transactionId Int
+  number        String      @unique
+  date          DateTime    @default(now())
+  amount        Float
+  customer      Customer    @relation(fields: [customerId], references: [id])
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+}
+
+// ==========================================
+// WARSTWA MONITORINGU
+// ==========================================
+
+model Monitoring {
+  id        Int                @id @default(autoincrement())
+  carWashId Int?
+  carWash   CarWash?           @relation(fields: [carWashId], references: [id])
+  cameras   Camera[]
+  sensors   Sensor[]
+  reports   MonitoringReport[]
+}
+
+model Camera {
+  id           Int        @id @default(autoincrement())
+  monitoringId Int
+  location     String
+  status       Boolean
+  monitoring   Monitoring @relation(fields: [monitoringId], references: [id])
+}
+
+model Sensor {
+  id           Int        @id @default(autoincrement())
+  monitoringId Int
+  type         String
+  value        Float
+  tank         String
+  status       String
+  monitoring   Monitoring @relation(fields: [monitoringId], references: [id])
+}
+
+model MonitoringReport {
+  id           Int        @id @default(autoincrement())
+  monitoringId Int
+  month        Int
+  alerts       String
+  monitoring   Monitoring @relation(fields: [monitoringId], references: [id])
+}
+
+model SalesReport {
+  id    Int   @id @default(autoincrement())
+  month Int
+  total Float
 }
