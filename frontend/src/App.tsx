@@ -1,31 +1,69 @@
 import { useState } from 'react';
 
-function App() {
-  // Stan do przełączania między logowaniem a rejestracją
-  const [isLogin, setIsLogin] = useState(true);
+// 1. Definiujemy typy, żeby TypeScript nie krzyczał o "any"
+interface WashService {
+  id: number;
+  type: string;
+  price: number;
+  loyaltyPoints: number;
+}
 
-  // Stan przechowujący dane z formularza
+interface Reservation {
+  id: number;
+  date: string;
+  status: string;
+  washService: WashService;
+}
+
+function App() {
+  const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', address: '', phone: '', email: '', password: ''
   });
-  
-  // Stan do wyświetlania komunikatów (błędy/sukcesy)
   const [message, setMessage] = useState('');
-  
-  // Stan przechowujący imię użytkownika po udanym zalogowaniu
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
 
-  // Funkcja aktualizująca dane podczas wpisywania
+  const [services, setServices] = useState<WashService[]>([]);
+  const [selectedService, setSelectedService] = useState('');
+  const [reservationDate, setReservationDate] = useState('');
+  
+  // Stan na listę rezerwacji
+  const [myReservations, setMyReservations] = useState<Reservation[]>([]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Główna funkcja wysyłająca dane do serwera
+  // Funkcja pobierająca cennik
+  const fetchServices = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/services');
+      const data = await res.json();
+      setServices(data);
+      if (data.length > 0) setSelectedService(String(data[0].id));
+    } catch {
+      console.error('Błąd pobierania usług');
+    }
+  };
+
+  // Funkcja pobierająca rezerwacje zalogowanego klienta
+  const fetchMyReservations = async (tokenToUse: string) => {
+    try {
+      const res = await fetch('http://localhost:5000/api/my-reservations', {
+        headers: { 'Authorization': `Bearer ${tokenToUse}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMyReservations(data);
+      }
+    } catch {
+      console.error('Błąd pobierania historii rezerwacji');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('Przetwarzanie...');
-
-    // Zależnie od tego, która zakładka jest aktywna, uderzamy pod inny adres
     const endpoint = isLogin ? '/api/login' : '/api/register';
 
     try {
@@ -34,22 +72,50 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-
       const data = await response.json();
 
       if (response.ok) {
         setMessage('✅ ' + data.message);
-        
         if (isLogin) {
-          // Jeśli to było logowanie -> zapisujemy token w przeglądarce (Local Storage)
           localStorage.setItem('token', data.token);
           setLoggedInUser(data.user.firstName);
+          
+          // Pobieramy dane zaraz po zalogowaniu, bez używania useEffect!
+          fetchServices();
+          fetchMyReservations(data.token);
         } else {
-          // Jeśli to była rejestracja -> przełączamy użytkownika na zakładkę logowania
           setIsLogin(true);
-          // Czyścimy tylko pole hasła dla bezpieczeństwa
           setFormData({ ...formData, password: '' });
         }
+      } else {
+        setMessage('❌ Błąd: ' + data.error);
+      }
+    } catch {
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
+
+  const handleReservation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage('Przetwarzanie rezerwacji...');
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:5000/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setMessage('✅ ' + data.message);
+        setReservationDate(''); 
+        
+        // Odświeżamy listę rezerwacji natychmiast po jej utworzeniu
+        fetchMyReservations(token);
       } else {
         setMessage('❌ Błąd: ' + data.error);
       }
@@ -61,18 +127,73 @@ function App() {
   // WIDOK 1: Zalogowany użytkownik
   if (loggedInUser) {
     return (
-      <div style={{ maxWidth: '400px', margin: '50px auto', textAlign: 'center', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: '600px', margin: '50px auto', textAlign: 'center', fontFamily: 'sans-serif' }}>
         <h2>Witaj, {loggedInUser}! 👋</h2>
         <p>Jesteś pomyślnie zalogowany do systemu Myjni PB.</p>
+        
+        <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #ccc', borderRadius: '10px', backgroundColor: '#f9f9f9' }}>
+          <h3>Zarezerwuj myjnię</h3>
+          <form onSubmit={handleReservation} style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
+            
+            <label style={{ textAlign: 'left', fontWeight: 'bold' }}>Wybierz usługę:</label>
+            <select 
+              value={selectedService} 
+              onChange={(e) => setSelectedService(e.target.value)}
+              style={{ padding: '10px' }}
+              required
+            >
+              <option value="" disabled>-- Wybierz usługę --</option>
+              {services.map(service => (
+                <option key={service.id} value={service.id}>
+                  {service.type} - {service.price} zł (+{service.loyaltyPoints} pkt)
+                </option>
+              ))}
+            </select>
+
+            <label style={{ textAlign: 'left', fontWeight: 'bold' }}>Wybierz datę i godzinę:</label>
+            <input 
+              type="datetime-local" 
+              value={reservationDate} 
+              onChange={(e) => setReservationDate(e.target.value)} 
+              style={{ padding: '10px' }}
+              required 
+            />
+
+            <button type="submit" style={{ padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
+              Potwierdź rezerwację
+            </button>
+          </form>
+        </div>
+
+        {message && <p style={{ marginTop: '15px', fontWeight: 'bold', color: message.includes('✅') ? 'green' : 'red' }}>{message}</p>}
+
+        {/* NOWA SEKCJA: Moje rezerwacje */}
+        <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #ccc', borderRadius: '10px', backgroundColor: '#e9ecef' }}>
+          <h3>Moje rezerwacje</h3>
+          {myReservations.length === 0 ? (
+            <p>Brak rezerwacji.</p>
+          ) : (
+            <ul style={{ listStyleType: 'none', padding: 0, textAlign: 'left' }}>
+              {myReservations.map((res) => (
+                <li key={res.id} style={{ padding: '10px', borderBottom: '1px solid #ccc', marginBottom: '5px', backgroundColor: 'white', borderRadius: '5px' }}>
+                  <strong>{new Date(res.date).toLocaleString()}</strong> <br/>
+                  Usługa: {res.washService.type} <br/>
+                  Status: <span style={{ color: res.status === 'Oczekująca' ? 'orange' : 'green', fontWeight: 'bold' }}>{res.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <button 
           onClick={() => {
-            // Wylogowywanie: usuwamy token i czyścimy stan
             localStorage.removeItem('token');
             setLoggedInUser(null);
             setMessage('');
-            setFormData({ ...formData, password: '' });
+            setMyReservations([]);
+            setFormData({ firstName: '', lastName: '', address: '', phone: '', email: '', password: '' });
           }}
-          style={{ padding: '10px 20px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '20px' }}
+          style={{ padding: '10px 20px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '30px' }}
         >
           Wyloguj się
         </button>
@@ -83,8 +204,6 @@ function App() {
   // WIDOK 2: Formularze logowania i rejestracji
   return (
     <div style={{ maxWidth: '400px', margin: '50px auto', fontFamily: 'sans-serif', padding: '20px', border: '1px solid #ccc', borderRadius: '10px' }}>
-      
-      {/* Zakładki */}
       <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '20px' }}>
         <button 
           onClick={() => { setIsLogin(true); setMessage(''); }} 
@@ -102,7 +221,6 @@ function App() {
 
       <h2>{isLogin ? 'Zaloguj się' : 'Zarejestruj się'} - Myjnia PB</h2>
       
-      {/* Formularz dopasowujący się do wybranej zakładki */}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {!isLogin && (
           <>
@@ -120,7 +238,6 @@ function App() {
         </button>
       </form>
       
-      {/* Komunikaty */}
       {message && <p style={{ marginTop: '15px', fontWeight: 'bold', textAlign: 'center' }}>{message}</p>}
     </div>
   );
