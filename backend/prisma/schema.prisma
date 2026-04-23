@@ -41,7 +41,8 @@ model Customer {
   lastName           String
   address            String
   phone              String
-  email              String
+  email              String              @unique
+  password           String?
   registered         Boolean             @default(false)
   loyaltyPoints      Int                 @default(0)
   
