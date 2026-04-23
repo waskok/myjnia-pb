@@ -34,6 +34,8 @@ app.get('/api/db-check', async (req, res) => {
   }
 });
 
+
+
 app.listen(PORT, () => {
   console.log(`🚀 Serwer uruchomiony pod adresem: http://localhost:${PORT}`);
 });
@@ -193,5 +195,117 @@ app.get('/api/my-reservations', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd podczas pobierania rezerwacji.' });
+  }
+});
+
+// ==========================================
+// MODUŁ PRACOWNIKA
+// ==========================================
+
+// 1. Logowanie pracownika
+app.post('/api/employee/login', async (req, res) => {
+  try {
+    const { login, password } = req.body;
+
+    if (!login || !password) {
+      return res.status(400).json({ error: 'Podaj login i hasło!' });
+    }
+
+    // Szukamy pracownika po loginie
+    const employee = await prisma.employee.findUnique({
+      where: { login }
+    });
+
+    if (!employee) {
+      return res.status(401).json({ error: 'Nieprawidłowy login lub hasło!' });
+    }
+
+    // Sprawdzamy hasło
+    const isPasswordValid = await bcrypt.compare(password, employee.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Nieprawidłowy login lub hasło!' });
+    }
+
+    // Generujemy token (dodajemy info, że to pracownik)
+    const token = jwt.sign(
+      { id: employee.id, login: employee.login, role: 'employee' },
+      process.env.JWT_SECRET as string,
+      { expiresIn: '8h' } // Pracownik ma dłuższą sesję na całą zmianę
+    );
+
+    res.status(200).json({ 
+      message: 'Zalogowano do panelu pracownika!', 
+      token: token,
+      user: { firstName: employee.firstName, role: 'employee' }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd logowania pracownika.' });
+  }
+});
+
+// 2. Pobieranie wszystkich rezerwacji z systemu
+app.get('/api/employee/reservations', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+
+    const token = authHeader.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+
+    // Zabezpieczenie: tylko pracownik może to zobaczyć
+    if (decoded.role !== 'employee') {
+      return res.status(403).json({ error: 'Brak uprawnień. Zaloguj się jako pracownik.' });
+    }
+
+    // Pobieramy absolutnie wszystkie rezerwacje + dane klienta i usługi
+    const allReservations = await prisma.reservation.findMany({
+      include: { 
+        washService: true,
+        customer: { select: { firstName: true, lastName: true, phone: true } } 
+      },
+      orderBy: { date: 'asc' } // Od najstarszych do obsłużenia
+    });
+
+    res.status(200).json(allReservations);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd pobierania rezerwacji.' });
+  }
+});
+
+// 3. Zmiana statusu na "Zakończona"
+app.patch('/api/employee/reservations/:id/complete', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+
+    const token = authHeader.split(' ')[1];
+    
+    // ZABEZPIECZENIE: Sprawdzamy, czy token istnieje
+    if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
+
+    // RZUTOWANIE: Upewniamy TypeScript, że token to na pewno tekst (as string)
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+
+    if (decoded.role !== 'employee') {
+      return res.status(403).json({ error: 'Brak uprawnień!' });
+    }
+
+    const reservationId = req.params.id;
+
+    await prisma.reservation.update({
+      where: { id: Number(reservationId) },
+      data: { status: 'Zakończona' }
+    });
+
+    res.status(200).json({ message: 'Rezerwacja oznaczona jako zakończona!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd aktualizacji statusu.' });
   }
 });
