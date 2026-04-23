@@ -147,8 +147,8 @@ app.post('/api/reservations', async (req, res) => {
       return res.status(400).json({ error: 'Brakujące dane rezerwacji!' });
     }
 
-    // Odkodowujemy token, aby bezpiecznie sprawdzić tożsamość klienta
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+    // Dodane "as string", żeby upewnić TS, że token to tekst
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
 
     const reservation = await prisma.reservation.create({
       data: {
@@ -163,5 +163,35 @@ app.post('/api/reservations', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd podczas rezerwacji. Zaloguj się ponownie.' });
+  }
+});
+
+// Endpoint do pobierania historii rezerwacji zalogowanego klienta
+app.get('/api/my-reservations', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Brak autoryzacji!' });
+    }
+
+    const token = authHeader.split(' ')[1]; 
+    
+    // ZABEZPIECZENIE: Sprawdzamy czy token na pewno istnieje po podziale stringa
+    if (!token) {
+      return res.status(401).json({ error: 'Brak poprawnego tokena!' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+
+    const userReservations = await prisma.reservation.findMany({
+      where: { customerId: decoded.id },
+      include: { washService: true }, 
+      orderBy: { date: 'desc' }       
+    });
+
+    res.status(200).json(userReservations);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd podczas pobierania rezerwacji.' });
   }
 });

@@ -8,6 +8,13 @@ interface WashService {
   loyaltyPoints: number;
 }
 
+interface Reservation {
+  id: number;
+  date: string;
+  status: string;
+  washService: WashService;
+}
+
 function App() {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
@@ -19,6 +26,9 @@ function App() {
   const [services, setServices] = useState<WashService[]>([]);
   const [selectedService, setSelectedService] = useState('');
   const [reservationDate, setReservationDate] = useState('');
+  
+  // Stan na listę rezerwacji
+  const [myReservations, setMyReservations] = useState<Reservation[]>([]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -33,6 +43,21 @@ function App() {
       if (data.length > 0) setSelectedService(String(data[0].id));
     } catch {
       console.error('Błąd pobierania usług');
+    }
+  };
+
+  // Funkcja pobierająca rezerwacje zalogowanego klienta
+  const fetchMyReservations = async (tokenToUse: string) => {
+    try {
+      const res = await fetch('http://localhost:5000/api/my-reservations', {
+        headers: { 'Authorization': `Bearer ${tokenToUse}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMyReservations(data);
+      }
+    } catch {
+      console.error('Błąd pobierania historii rezerwacji');
     }
   };
 
@@ -54,8 +79,10 @@ function App() {
         if (isLogin) {
           localStorage.setItem('token', data.token);
           setLoggedInUser(data.user.firstName);
-          // Pobieramy cennik bezpiecznie zaraz po zalogowaniu, bez używania useEffect!
+          
+          // Pobieramy dane zaraz po zalogowaniu, bez używania useEffect!
           fetchServices();
+          fetchMyReservations(data.token);
         } else {
           setIsLogin(true);
           setFormData({ ...formData, password: '' });
@@ -74,6 +101,8 @@ function App() {
     
     try {
       const token = localStorage.getItem('token');
+      if (!token) return;
+
       const response = await fetch('http://localhost:5000/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,7 +112,10 @@ function App() {
       const data = await response.json();
       if (response.ok) {
         setMessage('✅ ' + data.message);
-        setReservationDate(''); // Czyścimy datę po udanej rezerwacji
+        setReservationDate(''); 
+        
+        // Odświeżamy listę rezerwacji natychmiast po jej utworzeniu
+        fetchMyReservations(token);
       } else {
         setMessage('❌ Błąd: ' + data.error);
       }
@@ -92,7 +124,7 @@ function App() {
     }
   };
 
-  // WIDOK 1: Zalogowany użytkownik (TYLKO TWORZENIE REZERWACJI)
+  // WIDOK 1: Zalogowany użytkownik
   if (loggedInUser) {
     return (
       <div style={{ maxWidth: '600px', margin: '50px auto', textAlign: 'center', fontFamily: 'sans-serif' }}>
@@ -135,11 +167,30 @@ function App() {
 
         {message && <p style={{ marginTop: '15px', fontWeight: 'bold', color: message.includes('✅') ? 'green' : 'red' }}>{message}</p>}
 
+        {/* NOWA SEKCJA: Moje rezerwacje */}
+        <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #ccc', borderRadius: '10px', backgroundColor: '#e9ecef' }}>
+          <h3>Moje rezerwacje</h3>
+          {myReservations.length === 0 ? (
+            <p>Brak rezerwacji.</p>
+          ) : (
+            <ul style={{ listStyleType: 'none', padding: 0, textAlign: 'left' }}>
+              {myReservations.map((res) => (
+                <li key={res.id} style={{ padding: '10px', borderBottom: '1px solid #ccc', marginBottom: '5px', backgroundColor: 'white', borderRadius: '5px' }}>
+                  <strong>{new Date(res.date).toLocaleString()}</strong> <br/>
+                  Usługa: {res.washService.type} <br/>
+                  Status: <span style={{ color: res.status === 'Oczekująca' ? 'orange' : 'green', fontWeight: 'bold' }}>{res.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <button 
           onClick={() => {
             localStorage.removeItem('token');
             setLoggedInUser(null);
             setMessage('');
+            setMyReservations([]);
             setFormData({ firstName: '', lastName: '', address: '', phone: '', email: '', password: '' });
           }}
           style={{ padding: '10px 20px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '30px' }}
