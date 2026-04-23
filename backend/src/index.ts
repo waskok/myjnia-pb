@@ -128,3 +128,40 @@ app.post('/api/login', async (req, res) => {
     res.status(500).json({ error: 'Błąd serwera podczas logowania.' });
   }
 });
+// Endpoint do pobierania cennika usług myjni
+app.get('/api/services', async (req, res) => {
+  try {
+    const services = await prisma.washService.findMany();
+    res.json(services);
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania usług' });
+  }
+});
+
+// Endpoint do tworzenia rezerwacji
+app.post('/api/reservations', async (req, res) => {
+  try {
+    const { token, washServiceId, date } = req.body;
+
+    if (!token || !washServiceId || !date) {
+      return res.status(400).json({ error: 'Brakujące dane rezerwacji!' });
+    }
+
+    // Odkodowujemy token, aby bezpiecznie sprawdzić tożsamość klienta
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+
+    const reservation = await prisma.reservation.create({
+      data: {
+        customerId: decoded.id,
+        washServiceId: Number(washServiceId),
+        date: new Date(date),
+        status: 'Oczekująca'
+      }
+    });
+
+    res.status(201).json({ message: 'Rezerwacja potwierdzona i zapisana w bazie!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd podczas rezerwacji. Zaloguj się ponownie.' });
+  }
+});
