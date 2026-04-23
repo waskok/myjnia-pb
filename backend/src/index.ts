@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 // 1. Wczytujemy ukryty plik .env z naszym linkiem do Neona
 dotenv.config(); 
@@ -34,4 +36,95 @@ app.get('/api/db-check', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Serwer uruchomiony pod adresem: http://localhost:${PORT}`);
+});
+
+// Endpoint do rejestracji użytkownika
+app.post('/api/register', async (req, res) => {
+  try {
+    // 1. Pobieramy dane wysłane z formularza na frontendzie
+    const { firstName, lastName, address, phone, email, password } = req.body;
+
+    // 2. Sprawdzamy, czy wszystkie wymagane pola zostały wypełnione
+    if (!firstName || !lastName || !address || !phone || !email || !password) {
+      return res.status(400).json({ error: 'Wszystkie pola są wymagane!' });
+    }
+
+    // 3. Sprawdzamy, czy użytkownik z takim emailem już istnieje w bazie
+    const existingUser = await prisma.customer.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'Użytkownik o podanym adresie e-mail już istnieje!' });
+    }
+
+    // 4. Szyfrujemy hasło paczką bcrypt (10 to poziom skomplikowania szyfrowania)
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 5. Zapisujemy nowego klienta w bazie Neona
+    const newCustomer = await prisma.customer.create({
+      data: {
+        firstName,
+        lastName,
+        address,
+        phone,
+        email,
+        password: hashedPassword,
+        registered: true // Oznaczamy, że to klient zarejestrowany
+      }
+    });
+
+    res.status(201).json({ message: 'Rejestracja zakończona sukcesem!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera podczas rejestracji.' });
+  }
+});
+
+// Endpoint do logowania użytkownika
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1. Sprawdzamy, czy użytkownik w ogóle coś wpisał
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Podaj adres e-mail i hasło!' });
+    }
+
+    // 2. Szukamy klienta w bazie po emailu
+    const user = await prisma.customer.findUnique({
+      where: { email }
+    });
+
+    // Jeśli nie ma takiego użytkownika lub nie ma ustawionego hasła
+    if (!user || !user.password) {
+      return res.status(401).json({ error: 'Nieprawidłowy e-mail lub hasło!' });
+    }
+
+    // 3. Porównujemy wpisane hasło z tym zaszyfrowanym w bazie
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Nieprawidłowy e-mail lub hasło!' });
+    }
+
+    // 4. Jeśli wszystko gra, generujemy token JWT
+    // Token działa jak wirtualna opaska na rękę w klubie
+    const token = jwt.sign(
+      { id: user.id, email: user.email }, // Informacje wewnątrz tokena
+      process.env.JWT_SECRET as string,   // Tajny klucz szyfrujący z pliku .env
+      { expiresIn: '2h' }                 // Czas "życia" tokena (2 godziny)
+    );
+
+    // 5. Wysyłamy sukces i token do przeglądarki
+    res.status(200).json({ 
+      message: 'Zalogowano pomyślnie!', 
+      token: token,
+      user: { firstName: user.firstName, lastName: user.lastName } // Odsyłamy też imię do powitania
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera podczas logowania.' });
+  }
 });
