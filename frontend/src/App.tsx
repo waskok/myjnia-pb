@@ -1,359 +1,348 @@
 import { useState } from 'react';
+import './App.css'; 
 
 // --- TYPY ---
-interface WashService {
-  id: number;
-  type: string;
-  price: number;
-  loyaltyPoints: number;
-}
-
-interface Reservation {
-  id: number;
-  date: string;
-  status: string;
-  washService: WashService;
-  // Dodajemy opcjonalne dane klienta, bo pracownik je pobiera
-  customer?: {
-    firstName: string;
-    lastName: string;
-    phone: string;
-  };
-}
+interface WashService { id: number; type: string; price: number; loyaltyPoints: number; }
+interface Reservation { id: number; date: string; status: string; washService: WashService; customer?: { firstName: string; lastName: string; phone: string; }; }
+interface Fuel { id: number; type: string; pricePerLiter: number; tankLevel: number; maxLevel: number; }
+interface Delivery { id: number; fuel: Fuel; quantity: number; status: string; deliveryDate: string; supplier: string; owner: { firstName: string; lastName: string; } }
 
 function App() {
-  // --- STANY WSPÓLNE ---
   const [message, setMessage] = useState('');
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<'customer' | 'employee' | null>(null);
+  const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
 
   // --- STANY KLIENTA ---
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({
-    firstName: '', lastName: '', address: '', phone: '', email: '', password: ''
-  });
+  const [formData, setFormData] = useState({ firstName: '', lastName: '', address: '', phone: '', email: '', password: '' });
   const [services, setServices] = useState<WashService[]>([]);
   const [selectedService, setSelectedService] = useState('');
   const [reservationDate, setReservationDate] = useState('');
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
 
-  // --- STANY PRACOWNIKA ---
-  const [isEmployeeMode, setIsEmployeeMode] = useState(false);
-  const [employeeData, setEmployeeData] = useState({ login: '', password: '' });
+  // --- STANY SŁUŻBOWE (Pracownik + Właściciel) ---
+  const [loginMode, setLoginMode] = useState<'customer' | 'staff'>('customer');
+  const [staffData, setStaffData] = useState({ login: '', password: '' });
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
+  const [fuels, setFuels] = useState<Fuel[]>([]);
+  
+  // Stan do obsługi kasy POS
+  const [posData, setPosData] = useState({ fuelId: '', quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false });
+  const [posCustomerQuery, setPosCustomerQuery] = useState('');
+  const [posVerifiedCustomer, setPosVerifiedCustomer] = useState<{ email: string, firstName: string, loyaltyPoints: number } | null>(null);
 
-  // --- HANDLERY ZMIAN W FORMULARZACH ---
-  const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  // --- STANY WŁAŚCICIELA ---
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [newDelivery, setNewDelivery] = useState({ fuelId: '', quantity: 1000, supplier: '', deliveryDate: '' });
+  const [newPrice, setNewPrice] = useState<{ [key: number]: number }>({});
+
+  // --- HANDLERY ---
+  const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleStaffChange = (e: React.ChangeEvent<HTMLInputElement>) => setStaffData({ ...staffData, [e.target.name]: e.target.value });
+  const handleDeliveryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setNewDelivery({ ...newDelivery, [e.target.name]: e.target.value });
+  const handlePosChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') setPosData({ ...posData, [name]: (e.target as HTMLInputElement).checked });
+    else setPosData({ ...posData, [name]: value });
   };
 
-  const handleEmployeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmployeeData({ ...employeeData, [e.target.name]: e.target.value });
-  };
+  // --- POBIERANIE DANYCH ---
+  const fetchServices = async () => { try { const res = await fetch('http://localhost:5000/api/services'); const data = await res.json(); setServices(data); if (data.length > 0) setSelectedService(String(data[0].id)); } catch (e) { console.error(e); } };
+  const fetchFuels = async () => { try { const res = await fetch('http://localhost:5000/api/fuels'); const data = await res.json(); setFuels(data); if (data.length > 0) { setPosData(prev => ({ ...prev, fuelId: String(data[0].id) })); setNewDelivery(prev => ({ ...prev, fuelId: String(data[0].id) })); } } catch (e) { console.error(e); } };
+  const fetchMyReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/my-reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setMyReservations(await res.json()); } catch (e) { console.error(e); } };
+  const fetchAllReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/employee/reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setAllReservations(await res.json()); } catch (e) { console.error(e); } };
+  const fetchDeliveries = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/deliveries', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setDeliveries(await res.json()); } catch (e) { console.error(e); } };
 
-  // --- FUNKCJE POBIERAJĄCE DANE ---
-  const fetchServices = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/services');
-      const data = await res.json();
-      setServices(data);
-      if (data.length > 0) setSelectedService(String(data[0].id));
-    } catch {
-      console.error('Błąd pobierania usług');
-    }
-  };
-
-  const fetchMyReservations = async (tokenToUse: string) => {
-    try {
-      const res = await fetch('http://localhost:5000/api/my-reservations', {
-        headers: { 'Authorization': `Bearer ${tokenToUse}` }
-      });
-      const data = await res.json();
-      if (res.ok) setMyReservations(data);
-    } catch {
-      console.error('Błąd pobierania historii rezerwacji');
-    }
-  };
-
-  const fetchAllReservations = async (tokenToUse: string) => {
-    try {
-      const res = await fetch('http://localhost:5000/api/employee/reservations', {
-        headers: { 'Authorization': `Bearer ${tokenToUse}` }
-      });
-      const data = await res.json();
-      if (res.ok) setAllReservations(data);
-    } catch {
-      console.error('Błąd pobierania wszystkich rezerwacji');
-    }
-  };
-
-  // --- LOGOWANIE / REJESTRACJA KLIENTA ---
-  const handleCustomerSubmit = async (e: React.FormEvent) => {
+  // --- LOGOWANIE ---
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('Przetwarzanie...');
-    const endpoint = isLogin ? '/api/login' : '/api/register';
+    setMessage('Logowanie...');
+    const endpoint = loginMode === 'customer' ? (isLogin ? '/api/login' : '/api/register') : '/api/staff/login';
+    const bodyData = loginMode === 'customer' ? formData : staffData;
 
     try {
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      const data = await response.json();
-
-      if (response.ok) {
+      const res = await fetch(`http://localhost:5000${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData) });
+      const data = await res.json();
+      
+      if (res.ok) {
         setMessage('✅ ' + data.message);
-        if (isLogin) {
+        if (loginMode !== 'customer' || isLogin) {
           localStorage.setItem('token', data.token);
           setLoggedInUser(data.user.firstName);
-          setUserRole('customer');
-          fetchServices();
-          fetchMyReservations(data.token);
-        } else {
-          setIsLogin(true);
-          setFormData({ ...formData, password: '' });
-        }
-      } else {
-        setMessage('❌ Błąd: ' + data.error);
-      }
-    } catch {
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
+          setUserRole(data.user.role || 'customer');
+          
+          if (data.user.role === 'owner') { fetchFuels(); fetchDeliveries(data.token); }
+          else if (data.user.role === 'employee') { fetchFuels(); fetchAllReservations(data.token); }
+          else { fetchServices(); fetchMyReservations(data.token); }
+        } else { setIsLogin(true); setFormData({ ...formData, password: '' }); }
+      } else setMessage('❌ ' + data.error);
+    } catch (e) { console.error(e); setMessage('❌ Błąd połączenia z serwerem!'); }
   };
 
-  // --- LOGOWANIE PRACOWNIKA ---
-  const handleEmployeeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage('Logowanie pracownika...');
-
-    try {
-      const response = await fetch('http://localhost:5000/api/employee/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(employeeData)
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        setMessage('✅ ' + data.message);
-        localStorage.setItem('token', data.token);
-        setLoggedInUser(data.user.firstName);
-        setUserRole('employee');
-        fetchAllReservations(data.token);
-      } else {
-        setMessage('❌ Błąd: ' + data.error);
-      }
-    } catch {
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-
-  // --- TWORZENIE REZERWACJI (KLIENT) ---
-  const handleReservation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage('Przetwarzanie rezerwacji...');
-    
+  // --- AKCJE KASY (POS) ---
+  const handleVerifyCustomer = async () => {
+    if (!posCustomerQuery) return;
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch('http://localhost:5000/api/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate })
-      });
-      
-      const data = await response.json();
-      if (response.ok) {
-        setMessage('✅ ' + data.message);
-        setReservationDate(''); 
-        fetchMyReservations(token);
+      const res = await fetch(`http://localhost:5000/api/employee/customer/${encodeURIComponent(posCustomerQuery)}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok) {
+        setPosVerifiedCustomer(data);
+        setPosData({ ...posData, customerEmail: data.email });
+        setMessage('✅ Zweryfikowano klienta!');
       } else {
-        setMessage('❌ Błąd: ' + data.error);
+        setPosVerifiedCustomer(null);
+        setPosData({ ...posData, customerEmail: '' });
+        setMessage('❌ ' + data.error);
       }
-    } catch {
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
+    } catch (e) { console.error(e); }
   };
 
-  // --- ZMIANA STATUSU REZERWACJI (PRACOWNIK) ---
-  const handleCompleteReservation = async (id: number) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`http://localhost:5000/api/employee/reservations/${id}/complete`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        setMessage('✅ Status zmieniony na Zakończona!');
-        fetchAllReservations(token); // Odświeżamy listę dla pracownika
-      } else {
-        setMessage('❌ Błąd zmiany statusu.');
-      }
-    } catch {
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
+  const handlePOSSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try { 
+      const token = localStorage.getItem('token'); if (!token) return; 
+      const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); 
+      const data = await res.json(); 
+      if (res.ok) { 
+        setMessage('✅ ' + data.message); 
+        setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); 
+        setPosVerifiedCustomer(null);
+        setPosCustomerQuery('');
+        fetchFuels(); 
+      } else setMessage('❌ ' + data.error); 
+    } catch (e) { console.error(e); } 
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setLoggedInUser(null);
-    setUserRole(null);
-    setMessage('');
-    setEmployeeData({ login: '', password: '' });
-    setFormData({ ...formData, password: '' });
-  };
+  // --- INNE AKCJE ---
+  const handleReservation = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate }) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setReservationDate(''); fetchMyReservations(token); } } catch (e) { console.error(e); } };
+  const handleCompleteReservation = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Status zmieniony!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };
+  const handleOrderDelivery = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/owner/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(newDelivery) }); if (res.ok) { setMessage('✅ Dostawa zlecona!'); fetchDeliveries(token); setNewDelivery({...newDelivery, deliveryDate: '', supplier: ''}); } } catch (e) { console.error(e); } };
+  const handleCompleteDelivery = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/deliveries/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Paliwo dolane!'); fetchDeliveries(token); fetchFuels(); } } catch (e) { console.error(e); } };
+  const handleUpdatePrice = async (id: number) => { if (!newPrice[id]) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/fuels/${id}/price`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ price: newPrice[id] }) }); if (res.ok) { setMessage('✅ Cena zmieniona!'); fetchFuels(); setNewPrice({ ...newPrice, [id]: 0 }); } } catch (e) { console.error(e); } };
 
+  const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
+
+  const renderMessage = () => message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>;
+
+  // Obliczenia na żywo dla Kasy
+  const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
+  const costPLN = selectedFuel ? (selectedFuel.pricePerLiter * posData.quantity).toFixed(2) : '0.00';
+  const pointsCostPerLiter = selectedFuel?.type === 'LPG' ? 50 : 100;
+  const costPoints = Math.floor(posData.quantity) * pointsCostPerLiter;
+  const canAffordWithPoints = posVerifiedCustomer && posVerifiedCustomer.loyaltyPoints >= costPoints;
 
   // ==============================================
-  // WIDOK 1: PANEL PRACOWNIKA
+  // WIDOK 1: PANEL WŁAŚCICIELA
+  // ==============================================
+  if (userRole === 'owner') {
+    return (
+      <div className="app-container">
+        <h2>Witaj, {loggedInUser}! (Panel Właściciela) 💼</h2>
+        
+        <div className="card card-danger">
+          <h3>Zarządzanie Cennikiem i Magazynem 📈</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr><th>Paliwo</th><th>Stan Zbiornika</th><th>Aktualna Cena</th><th>Nowa Cena</th><th>Akcja</th></tr></thead>
+              <tbody>
+                {fuels.map(f => (
+                  <tr key={f.id}>
+                    <td><strong>{f.type}</strong></td>
+                    <td style={{ color: f.tankLevel < 1000 ? 'red' : 'black', fontWeight: f.tankLevel < 1000 ? 'bold' : 'normal' }}>{f.tankLevel} / {f.maxLevel} L</td>
+                    <td>{f.pricePerLiter} zł/L</td>
+                    <td><input type="number" step="0.01" className="input-small" value={newPrice[f.id] || ''} onChange={(e) => setNewPrice({ ...newPrice, [f.id]: parseFloat(e.target.value) })} /></td>
+                    <td><button onClick={() => handleUpdatePrice(f.id)} className="btn btn-success">Zmień</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="card card-warning">
+          <h3>Zarządzanie Dostawami 🚚</h3>
+          <form onSubmit={handleOrderDelivery} className="flex-row">
+            <select name="fuelId" className="select-field input-small" value={newDelivery.fuelId} onChange={handleDeliveryChange} required>
+              <option value="" disabled>Paliwo</option>
+              {fuels.map(f => <option key={f.id} value={f.id}>{f.type}</option>)}
+            </select>
+            <input type="number" name="quantity" className="input-field input-small" placeholder="Ilość litrów" value={newDelivery.quantity} onChange={handleDeliveryChange} required />
+            <input type="text" name="supplier" className="input-field input-small" placeholder="Nazwa dostawcy" value={newDelivery.supplier} onChange={handleDeliveryChange} required />
+            <input type="datetime-local" name="deliveryDate" className="input-field" style={{width: 'auto'}} value={newDelivery.deliveryDate} onChange={handleDeliveryChange} required />
+            <button type="submit" className="btn btn-warning">Zleć dostawę</button>
+          </form>
+          
+          <ul className="list-unstyled">
+            {deliveries.map(d => (
+              <li key={d.id} className="list-item flex-space-between">
+                <div>
+                  <strong>{d.fuel.type}</strong> - {d.quantity} L (Dostawca: {d.supplier})<br/> 
+                  Planowana data: {new Date(d.deliveryDate).toLocaleString()} <br/>
+                  Status: <span className="text-bold" style={{ color: d.status === 'Dostarczona' ? 'green' : 'orange' }}>{d.status}</span>
+                </div>
+                {d.status !== 'Dostarczona' && <button onClick={() => handleCompleteDelivery(d.id)} className="btn btn-primary">Odbierz dostawę</button>}
+              </li>
+            ))}
+          </ul>
+        </div>
+        
+        {renderMessage()}
+        <button onClick={logout} className="btn btn-danger" style={{marginTop: '30px'}}>Wyloguj się</button>
+      </div>
+    );
+  }
+
+  // ==============================================
+  // WIDOK 2: PANEL PRACOWNIKA
   // ==============================================
   if (userRole === 'employee') {
     return (
-      <div style={{ maxWidth: '800px', margin: '50px auto', textAlign: 'center', fontFamily: 'sans-serif' }}>
+      <div className="app-container">
         <h2>Witaj, {loggedInUser}! (Panel Pracownika) 👨‍🔧</h2>
         
-        <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #ccc', borderRadius: '10px', backgroundColor: '#e9ecef' }}>
-          <h3>Wszystkie rezerwacje w systemie</h3>
-          {allReservations.length === 0 ? (
-            <p>Brak rezerwacji.</p>
-          ) : (
-            <ul style={{ listStyleType: 'none', padding: 0, textAlign: 'left' }}>
+        <div className="card card-info">
+          <h3>Kasa Fiskalna (Sprzedaż Paliwa) ⛽</h3>
+          
+          {/* KROK 1: Identyfikacja klienta */}
+          <div className="flex-row text-left" style={{ alignItems: 'flex-end', marginBottom: '15px' }}>
+             <div style={{ flex: 1 }}>
+               <label>1. Skanuj klienta (E-mail lub Telefon):</label>
+               <input type="text" className="input-field" value={posCustomerQuery} onChange={e => setPosCustomerQuery(e.target.value)} placeholder="Wpisz dane i kliknij Sprawdź..." />
+             </div>
+             <button type="button" onClick={handleVerifyCustomer} className="btn btn-dark">Sprawdź</button>
+             <button type="button" onClick={() => { setPosVerifiedCustomer(null); setPosCustomerQuery(''); setPosData({...posData, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false}); }} className="btn btn-light">Pomiń</button>
+          </div>
+
+          {posVerifiedCustomer && (
+             <div style={{ padding: '10px', backgroundColor: '#d4edda', borderRadius: '5px', marginBottom: '20px', border: '1px solid #c3e6cb', color: '#155724' }}>
+                <strong>Zweryfikowano:</strong> {posVerifiedCustomer.firstName} | <strong>Dostępne punkty:</strong> {posVerifiedCustomer.loyaltyPoints} pkt
+             </div>
+          )}
+
+          {/* KROK 2: Szczegóły transakcji */}
+          <form onSubmit={handlePOSSubmit} className="flex-col">
+            <div className="flex-row text-left">
+              <div style={{ flex: 1 }}><label>2. Wybierz paliwo:</label><select name="fuelId" className="select-field" value={posData.fuelId} onChange={handlePosChange}>{fuels.map(f => <option key={f.id} value={f.id}>{f.type} - {f.pricePerLiter} zł/l (Dostępne: {f.tankLevel} l)</option>)}</select></div>
+              <div style={{ flex: 1 }}><label>Ilość (L):</label><input type="number" name="quantity" className="input-field" min="1" step="0.01" value={posData.quantity} onChange={handlePosChange} required /></div>
+            </div>
+            
+            <div style={{ padding: '15px', backgroundColor: '#e9ecef', borderRadius: '5px', fontSize: '18px' }}>
+              <strong>Do zapłaty:</strong> {costPLN} zł 
+              {posVerifiedCustomer && (<span> albo <strong>{costPoints} pkt</strong></span>)}
+            </div>
+
+            <div className="flex-row text-left">
+              <div style={{ flex: 1 }}>
+                <label>3. Płatność:</label>
+                <select name="paymentMethod" className="select-field" value={posData.paymentMethod} onChange={handlePosChange}>
+                  <option value="Karta">Karta</option>
+                  <option value="Gotówka">Gotówka</option>
+                  {posVerifiedCustomer && <option value="Punkty" disabled={!canAffordWithPoints}>Punkty Lojalnościowe {canAffordWithPoints ? '' : '(Zbyt mało)'}</option>}
+                </select>
+              </div>
+            </div>
+
+            {/* ZMIANA: Faktura zawsze widoczna, niezależnie od tego czy skanowaliśmy klienta */}
+            <div className="flex-row text-left" style={{ justifyContent: 'flex-start', alignItems: 'center' }}>
+              <input type="checkbox" name="issueInvoice" id="issueInvoice" checked={posData.issueInvoice} onChange={handlePosChange} style={{ transform: 'scale(1.5)', margin: '10px' }} />
+              <label htmlFor="issueInvoice" className="text-bold">Wystaw Fakturę VAT</label>
+            </div>
+
+            <button type="submit" className="btn btn-info" style={{ marginTop: '10px', fontSize: '18px' }}>Zatwierdź sprzedaż</button>
+          </form>
+        </div>
+
+        <div className="card card-gray">
+          <h3>Rezerwacje myjni do obsłużenia</h3>
+          {allReservations.length === 0 ? <p>Brak rezerwacji.</p> : (
+            <ul className="list-unstyled">
               {allReservations.map((res) => (
-                <li key={res.id} style={{ padding: '15px', borderBottom: '1px solid #ccc', marginBottom: '10px', backgroundColor: 'white', borderRadius: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <strong>{new Date(res.date).toLocaleString()}</strong> <br/>
-                    Klient: {res.customer?.firstName} {res.customer?.lastName} (Tel: {res.customer?.phone}) <br/>
-                    Usługa: {res.washService.type} <br/>
-                    Status: <span style={{ color: res.status === 'Oczekująca' ? 'orange' : 'green', fontWeight: 'bold' }}>{res.status}</span>
-                  </div>
-                  
-                  {res.status === 'Oczekująca' && (
-                    <button 
-                      onClick={() => handleCompleteReservation(res.id)}
-                      style={{ padding: '10px 15px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', height: '40px' }}
-                    >
-                      Zakończ
-                    </button>
-                  )}
+                <li key={res.id} className="list-item flex-space-between">
+                  <div><strong>{new Date(res.date).toLocaleString()}</strong> <br/> Usługa: {res.washService.type} <br/> Status: <b>{res.status}</b></div>
+                  {res.status === 'Oczekująca' && <button onClick={() => handleCompleteReservation(res.id)} className="btn btn-primary">Zakończ</button>}
                 </li>
               ))}
             </ul>
           )}
         </div>
-
-        {message && <p style={{ marginTop: '15px', fontWeight: 'bold', color: message.includes('✅') ? 'green' : 'red' }}>{message}</p>}
-
-        <button onClick={logout} style={{ padding: '10px 20px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '30px' }}>
-          Wyloguj się
-        </button>
+        {renderMessage()}
+        <button onClick={logout} className="btn btn-danger" style={{marginTop: '30px'}}>Wyloguj się</button>
       </div>
     );
   }
 
   // ==============================================
-  // WIDOK 2: PANEL KLIENTA (ZALOGOWANY)
+  // WIDOK 3: PANEL KLIENTA
   // ==============================================
   if (userRole === 'customer') {
     return (
-      <div style={{ maxWidth: '600px', margin: '50px auto', textAlign: 'center', fontFamily: 'sans-serif' }}>
+      <div className="app-container">
         <h2>Witaj, {loggedInUser}! 👋</h2>
         
-        <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #ccc', borderRadius: '10px', backgroundColor: '#f9f9f9' }}>
-          <h3>Zarezerwuj myjnię</h3>
-          <form onSubmit={handleReservation} style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
-            <label style={{ textAlign: 'left', fontWeight: 'bold' }}>Wybierz usługę:</label>
-            <select value={selectedService} onChange={(e) => setSelectedService(e.target.value)} style={{ padding: '10px' }} required>
-              <option value="" disabled>-- Wybierz usługę --</option>
-              {services.map(service => (
-                <option key={service.id} value={service.id}>{service.type} - {service.price} zł (+{service.loyaltyPoints} pkt)</option>
-              ))}
-            </select>
-            <label style={{ textAlign: 'left', fontWeight: 'bold' }}>Wybierz datę i godzinę:</label>
-            <input type="datetime-local" value={reservationDate} onChange={(e) => setReservationDate(e.target.value)} style={{ padding: '10px' }} required />
-            <button type="submit" style={{ padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>Potwierdź rezerwację</button>
+        <div className="card card-light">
+          <h3 className="text-left">Zarezerwuj myjnię</h3>
+          <form onSubmit={handleReservation} className="flex-col text-left">
+            <select value={selectedService} className="select-field" onChange={(e) => setSelectedService(e.target.value)} required><option value="" disabled>-- Wybierz usługę --</option>{services.map(service => <option key={service.id} value={service.id}>{service.type} - {service.price} zł (+{service.loyaltyPoints} pkt)</option>)}</select>
+            <input type="datetime-local" className="input-field" value={reservationDate} onChange={(e) => setReservationDate(e.target.value)} required />
+            <button type="submit" className="btn btn-success">Potwierdź rezerwację</button>
           </form>
         </div>
 
-        <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #ccc', borderRadius: '10px', backgroundColor: '#e9ecef' }}>
-          <h3>Moje rezerwacje</h3>
-          {myReservations.length === 0 ? <p>Brak rezerwacji.</p> : (
-            <ul style={{ listStyleType: 'none', padding: 0, textAlign: 'left' }}>
-              {myReservations.map((res) => (
-                <li key={res.id} style={{ padding: '10px', borderBottom: '1px solid #ccc', marginBottom: '5px', backgroundColor: 'white', borderRadius: '5px' }}>
-                  <strong>{new Date(res.date).toLocaleString()}</strong> <br/>
-                  Usługa: {res.washService.type} <br/>
-                  Status: <span style={{ color: res.status === 'Oczekująca' ? 'orange' : 'green', fontWeight: 'bold' }}>{res.status}</span>
-                </li>
-              ))}
+        <div className="card card-gray">
+          <h3 className="text-left">Moje rezerwacje</h3>
+          {myReservations.length === 0 ? <p className="text-left">Brak rezerwacji.</p> : (
+            <ul className="list-unstyled">
+              {myReservations.map((res) => <li key={res.id} className="list-item"><strong>{new Date(res.date).toLocaleString()}</strong> <br/> Usługa: {res.washService.type} <br/> Status: <b>{res.status}</b></li>)}
             </ul>
           )}
         </div>
-
-        {message && <p style={{ marginTop: '15px', fontWeight: 'bold', color: message.includes('✅') ? 'green' : 'red' }}>{message}</p>}
-        <button onClick={logout} style={{ padding: '10px 20px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', marginTop: '30px' }}>Wyloguj się</button>
+        {renderMessage()}
+        <button onClick={logout} className="btn btn-danger" style={{marginTop: '30px'}}>Wyloguj się</button>
       </div>
     );
   }
 
   // ==============================================
-  // WIDOK 3: FORMULARZE LOGOWANIA / REJESTRACJI
+  // WIDOK 4: EKRAN LOGOWANIA
   // ==============================================
   return (
-    <div style={{ maxWidth: '400px', margin: '50px auto', fontFamily: 'sans-serif', padding: '20px', border: '1px solid #ccc', borderRadius: '10px' }}>
-      
-      {/* Przełącznik Klient / Pracownik */}
-      <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-        <button 
-          onClick={() => { setIsEmployeeMode(!isEmployeeMode); setMessage(''); }}
-          style={{ padding: '5px 15px', backgroundColor: isEmployeeMode ? '#ffc107' : '#17a2b8', color: 'black', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
-        >
-          {isEmployeeMode ? 'Wróć do strefy Klienta' : 'Przejdź do strefy Pracownika'}
-        </button>
+    <div className="login-container">
+      <div className="flex-space-around">
+        <button onClick={() => { setLoginMode('customer'); setMessage(''); }} className={`btn-tab ${loginMode === 'customer' ? 'btn-success' : 'btn-light'}`}>Strefa Klienta</button>
+        <button onClick={() => { setLoginMode('staff'); setMessage(''); }} className={`btn-tab ${loginMode === 'staff' ? 'btn-dark' : 'btn-light'}`}>Strefa Służbowa</button>
       </div>
 
-      <hr style={{ marginBottom: '20px' }} />
-
-      {isEmployeeMode ? (
-        // FORMULARZ PRACOWNIKA
-        <>
-          <h2 style={{ textAlign: 'center', color: '#ffc107', textShadow: '1px 1px 2px black' }}>Strefa Pracownika</h2>
-          <form onSubmit={handleEmployeeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <input name="login" placeholder="Login pracownika" value={employeeData.login} onChange={handleEmployeeChange} required />
-            <input name="password" type="password" placeholder="Hasło" value={employeeData.password} onChange={handleEmployeeChange} required />
-            <button type="submit" style={{ padding: '10px', backgroundColor: '#343a40', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '5px', fontWeight: 'bold' }}>Zaloguj jako pracownik</button>
-          </form>
-        </>
+      {loginMode === 'staff' ? (
+        <form onSubmit={handleAuthSubmit} className="flex-col-sm">
+          <h2>Logowanie Służbowe</h2>
+          <input name="login" className="input-field" placeholder="Login pracownika lub właściciela" value={staffData.login} onChange={handleStaffChange} required />
+          <input name="password" type="password" className="input-field" placeholder="Hasło" value={staffData.password} onChange={handleStaffChange} required />
+          <button type="submit" className="btn btn-dark">Zaloguj do systemu</button>
+        </form>
       ) : (
-        // FORMULARZE KLIENTA
         <>
-          <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '20px' }}>
-            <button onClick={() => { setIsLogin(true); setMessage(''); }} style={{ padding: '10px', width: '50%', border: 'none', backgroundColor: isLogin ? '#007BFF' : '#f0f0f0', color: isLogin ? 'white' : 'black', cursor: 'pointer' }}>Logowanie</button>
-            <button onClick={() => { setIsLogin(false); setMessage(''); }} style={{ padding: '10px', width: '50%', border: 'none', backgroundColor: !isLogin ? '#007BFF' : '#f0f0f0', color: !isLogin ? 'white' : 'black', cursor: 'pointer' }}>Rejestracja</button>
+          <div className="flex-space-around">
+            <button onClick={() => { setIsLogin(true); setMessage(''); }} className={`btn-tab ${isLogin ? 'btn-primary' : 'btn-light'}`}>Logowanie</button>
+            <button onClick={() => { setIsLogin(false); setMessage(''); }} className={`btn-tab ${!isLogin ? 'btn-primary' : 'btn-light'}`}>Rejestracja</button>
           </div>
-
-          <h2 style={{ textAlign: 'center' }}>{isLogin ? 'Zaloguj się' : 'Zarejestruj się'} - Klient</h2>
-          
-          <form onSubmit={handleCustomerSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <h2>{isLogin ? 'Zaloguj się' : 'Zarejestruj się'}</h2>
+          <form onSubmit={handleAuthSubmit} className="flex-col-sm">
             {!isLogin && (
               <>
-                <input name="firstName" placeholder="Imię" value={formData.firstName} onChange={handleCustomerChange} required />
-                <input name="lastName" placeholder="Nazwisko" value={formData.lastName} onChange={handleCustomerChange} required />
-                <input name="address" placeholder="Adres" value={formData.address} onChange={handleCustomerChange} required />
-                <input name="phone" placeholder="Telefon" value={formData.phone} onChange={handleCustomerChange} required />
+                <input name="firstName" className="input-field" placeholder="Imię" value={formData.firstName} onChange={handleCustomerChange} required />
+                <input name="lastName" className="input-field" placeholder="Nazwisko" value={formData.lastName} onChange={handleCustomerChange} required />
+                <input name="address" className="input-field" placeholder="Adres" value={formData.address} onChange={handleCustomerChange} required />
+                <input name="phone" className="input-field" placeholder="Telefon" value={formData.phone} onChange={handleCustomerChange} required />
               </>
             )}
-            <input name="email" type="email" placeholder="E-mail" value={formData.email} onChange={handleCustomerChange} required />
-            <input name="password" type="password" placeholder="Hasło" value={formData.password} onChange={handleCustomerChange} required />
-            <button type="submit" style={{ padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '5px' }}>{isLogin ? 'Zaloguj się' : 'Załóż konto'}</button>
+            <input name="email" type="email" className="input-field" placeholder="E-mail" value={formData.email} onChange={handleCustomerChange} required />
+            <input name="password" type="password" className="input-field" placeholder="Hasło" value={formData.password} onChange={handleCustomerChange} required />
+            <button type="submit" className="btn btn-success">{isLogin ? 'Zaloguj' : 'Załóż konto'}</button>
           </form>
         </>
       )}
-      
-      {message && <p style={{ marginTop: '15px', fontWeight: 'bold', textAlign: 'center' }}>{message}</p>}
+      {renderMessage()}
     </div>
   );
 }
