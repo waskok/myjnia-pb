@@ -105,6 +105,8 @@ model FuelDelivery {
   owner        Owner    @relation(fields: [ownerId], references: [id])
 }
 
+
+
 model FuelDispenser {
   id     Int             @id @default(autoincrement())
   number Int

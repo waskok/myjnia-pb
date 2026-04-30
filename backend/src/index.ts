@@ -35,6 +35,110 @@ app.get('/api/db-check', async (req, res) => {
 });
 
 
+// ==========================================
+// MODUŁ KASJERA (POS) I SPRZEDAŻY
+// ==========================================
+
+// 1. Pobieranie cennika paliw
+app.get('/api/fuels', async (req, res) => {
+  try {
+    const fuels = await prisma.fuel.findMany();
+    res.json(fuels);
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania paliw' });
+  }
+});
+
+// 2. Przetwarzanie transakcji na kasie (paliwo + punkty)
+app.post('/api/transactions/fuel', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+
+    if (decoded.role !== 'employee') {
+      return res.status(403).json({ error: 'Brak uprawnień kasjera!' });
+    }
+
+    const { fuelId, quantity, customerEmail, paymentMethod } = req.body;
+
+    if (!fuelId || !quantity || !paymentMethod) {
+      return res.status(400).json({ error: 'Brakujące dane transakcji!' });
+    }
+
+    // Pobieramy dane paliwa
+    const fuel = await prisma.fuel.findUnique({ where: { id: Number(fuelId) } });
+    if (!fuel) return res.status(404).json({ error: 'Paliwo nie znalezione!' });
+
+    if (fuel.tankLevel < quantity) {
+      return res.status(400).json({ error: 'Brak wystarczającej ilości paliwa w zbiorniku!' });
+    }
+
+    const totalAmount = fuel.pricePerLiter * quantity;
+    let customer = null;
+    let pointsEarned = 0;
+
+    // Jeśli podano email klienta, szukamy go w bazie, by dodać punkty
+    if (customerEmail) {
+      customer = await prisma.customer.findUnique({ where: { email: customerEmail } });
+      if (customer) {
+        const loyalty = await prisma.loyaltyProgram.findFirst();
+        if (loyalty) {
+          // Obliczanie punktów (zgodnie ze specyfikacją PB)
+          if (fuel.type === 'LPG') {
+            pointsEarned = Math.floor(quantity) * loyalty.pointsPerLpg;
+          } else {
+            pointsEarned = Math.floor(quantity) * loyalty.pointsPerE95;
+          }
+
+          // Dodajemy punkty do konta klienta
+          await prisma.customer.update({
+            where: { id: customer.id },
+            data: { loyaltyPoints: { increment: pointsEarned } }
+          });
+        }
+      }
+    }
+
+    // Zapisujemy całą transakcję w historii
+    const transaction = await prisma.transaction.create({
+      data: {
+        employeeId: decoded.id,
+        customerId: customer ? customer.id : null,
+        date: new Date(),
+        totalAmount: totalAmount,
+        paymentMethod: paymentMethod,
+        items: {
+          create: [
+            {
+              product: `Paliwo ${fuel.type}`,
+              quantity: Number(quantity),
+              unitPrice: fuel.pricePerLiter,
+              value: totalAmount
+            }
+          ]
+        }
+      }
+    });
+
+    // Odejmowanie sprzedanego paliwa ze zbiornika
+    await prisma.fuel.update({
+      where: { id: fuel.id },
+      data: { tankLevel: { decrement: Number(quantity) } }
+    });
+
+    res.status(201).json({ 
+      message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt!` : ''}` 
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd podczas transakcji.' });
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Serwer uruchomiony pod adresem: http://localhost:${PORT}`);
