@@ -1,11 +1,43 @@
 /* frontend/src/App.css */
 
-.app-container { max-width: 800px; margin: 50px auto; text-align: center; font-family: sans-serif; }
-.login-container { max-width: 400px; margin: 50px auto; font-family: sans-serif; padding: 20px; border: 1px solid #ccc; border-radius: 10px; }
+/* Wymuszamy jasny motyw i twardo nadpisujemy domyślne style (np. z index.css) */
+body { 
+  background-color: #ffffff !important; 
+  color: #333333 !important; 
+  margin: 0; 
+  padding: 20px; 
+}
+
+/* Wymuszamy ciemny kolor dla WSZYSTKICH nagłówków na stronie */
+h1, h2, h3, h4, h5, h6 {
+  color: #212529 !important; 
+}
+
+.app-container { 
+  max-width: 800px; 
+  margin: 20px auto; 
+  text-align: center; 
+  font-family: sans-serif; 
+  background-color: #ffffff; 
+  padding: 30px; 
+  border-radius: 10px; 
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+}
+
+.login-container { 
+  max-width: 400px; 
+  margin: 50px auto; 
+  font-family: sans-serif; 
+  padding: 30px; 
+  border: 1px solid #e0e0e0; 
+  border-radius: 10px; 
+  background-color: #ffffff; 
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+}
 
 .card { margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; }
-.card-light { background-color: #f9f9f9; }
-.card-gray { background-color: #e9ecef; }
+.card-light { background-color: #f8f9fa; border-color: #dee2e6; }
+.card-gray { background-color: #e9ecef; border-color: #ced4da; }
 .card-info { border-color: #17a2b8; background-color: #e0f7fa; }
 .card-danger { border-color: #dc3545; background-color: #f8d7da; }
 .card-warning { border-color: #ffc107; background-color: #fff3cd; }
@@ -16,29 +48,40 @@
 .flex-space-between { display: flex; justify-content: space-between; align-items: center; }
 .flex-space-around { display: flex; justify-content: space-around; margin-bottom: 20px; }
 
-.input-field, .select-field { padding: 10px; width: 100%; box-sizing: border-box; }
+/* Wymuszamy jasne tło i ciemny tekst również w polach formularzy */
+.input-field, .select-field { 
+  padding: 10px; 
+  width: 100%; 
+  box-sizing: border-box; 
+  border: 1px solid #ced4da; 
+  border-radius: 5px; 
+  background-color: #ffffff !important; 
+  color: #333333 !important; 
+}
 .input-small { padding: 10px; width: 120px; }
 
-.btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+.btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: opacity 0.2s; }
+.btn:hover { opacity: 0.85; }
 .btn-primary { background-color: #007bff; color: white; }
 .btn-success { background-color: #28a745; color: white; }
 .btn-danger { background-color: #dc3545; color: white; }
 .btn-warning { background-color: #ffc107; color: black; }
 .btn-info { background-color: #17a2b8; color: white; }
 .btn-dark { background-color: #343a40; color: white; }
-.btn-light { background-color: #f0f0f0; color: black; }
-.btn-tab { padding: 10px; width: 50%; border: none; cursor: pointer; }
+.btn-light { background-color: #e9ecef; color: black; }
+.btn-tab { padding: 10px; width: 50%; border: none; cursor: pointer; border-radius: 5px; }
 
 .list-unstyled { list-style-type: none; padding: 0; text-align: left; }
-.list-item { padding: 15px; border-bottom: 1px solid #ccc; margin-bottom: 10px; background-color: white; border-radius: 5px; }
+.list-item { padding: 15px; border-bottom: 1px solid #dee2e6; margin-bottom: 10px; background-color: #ffffff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
 
-.data-table { width: 100%; margin-top: 10px; border-collapse: collapse; text-align: left; }
-.data-table th, .data-table td { padding: 10px; border-bottom: 1px solid #ccc; }
+.data-table { width: 100%; margin-top: 10px; border-collapse: collapse; text-align: left; background-color: #ffffff; }
+.data-table th, .data-table td { padding: 12px; border-bottom: 1px solid #dee2e6; color: #333333 !important; }
+.data-table th { background-color: #f8f9fa; }
 
 .text-center { text-align: center; }
 .text-left { text-align: left; }
 .text-bold { font-weight: bold; }
 
-.msg { margin-top: 15px; font-weight: bold; text-align: center; }
-.msg-success { color: green; }
-.msg-error { color: red; }
+.msg { margin-top: 15px; font-weight: bold; text-align: center; padding: 10px; border-radius: 5px; }
+.msg-success { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
+.msg-error { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; }
