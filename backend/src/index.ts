@@ -186,6 +186,7 @@ app.get('/api/fuels', async (req, res) => {
     res.status(500).json({ error: 'Błąd pobierania paliw' });
   }
 });
+
 // Wyszukiwanie klienta po e-mailu lub telefonie
 app.get('/api/employee/customer/:identifier', async (req, res) => {
   try {
@@ -200,7 +201,6 @@ app.get('/api/employee/customer/:identifier', async (req, res) => {
 
     const { identifier } = req.params;
     
-    // Szukamy klienta dopasowując e-mail LUB telefon
     const customer = await prisma.customer.findFirst({
       where: {
         OR: [
@@ -219,6 +219,7 @@ app.get('/api/employee/customer/:identifier', async (req, res) => {
     res.status(500).json({ error: 'Błąd pobierania danych klienta.' });
   }
 });
+
 // 2. Przetwarzanie transakcji na kasie (Paliwo, Punkty, Faktury, Płacenie Punktami)
 app.post('/api/transactions/fuel', async (req, res) => {
   try {
@@ -230,7 +231,6 @@ app.post('/api/transactions/fuel', async (req, res) => {
 
     if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień kasjera!' });
 
-    // Zauważ nowe pole: issueInvoice
     const { fuelId, quantity, customerEmail, paymentMethod, issueInvoice } = req.body;
     if (!fuelId || !quantity || !paymentMethod) return res.status(400).json({ error: 'Brakujące dane transakcji!' });
 
@@ -252,7 +252,6 @@ app.post('/api/transactions/fuel', async (req, res) => {
     if (paymentMethod === 'Punkty') {
         if (!customer) return res.status(400).json({ error: 'Płacenie punktami wymaga podania e-maila zarejestrowanego klienta!' });
         
-        // Zgodnie ze specyfikacją: LPG to 50 pkt/litr, reszta to 100 pkt/litr
         const pointsNeeded = fuel.type === 'LPG' ? Math.floor(quantity) * 50 : Math.floor(quantity) * 100;
         
         if (customer.loyaltyPoints < pointsNeeded) {
@@ -260,7 +259,7 @@ app.post('/api/transactions/fuel', async (req, res) => {
         }
         
         pointsDeducted = pointsNeeded;
-        totalAmount = 0; // Transakcja za punkty jest darmowa w PLN
+        totalAmount = 0; 
         
         await prisma.customer.update({
             where: { id: customer.id },
@@ -281,7 +280,6 @@ app.post('/api/transactions/fuel', async (req, res) => {
         }
     }
 
-    // Zapis transakcji
     const transaction = await prisma.transaction.create({
       data: {
         employeeId: decoded.id,
@@ -295,33 +293,32 @@ app.post('/api/transactions/fuel', async (req, res) => {
       }
     });
 
-    // --- GENEROWANIE FAKTURY VAT ---
-    let invoiceMsg = '';
+    // --- GENEROWANIE FAKTURY VAT ALBO PARAGONU ---
+    let documentMsg = ' Drukowanie paragonu...'; // Domyślna akcja to wydruk paragonu
+
     if (issueInvoice && customer && totalAmount > 0) {
         await prisma.invoice.create({
             data: {
                 customerId: customer.id,
                 transactionId: transaction.id,
-                number: `FV/${new Date().getFullYear()}/${transaction.id}`, // Prosty format numeracji faktur
+                number: `FV/${new Date().getFullYear()}/${transaction.id}`, 
                 amount: totalAmount
             }
         });
-        invoiceMsg = ' Wystawiono Fakturę VAT.';
+        documentMsg = ' Wystawiono Fakturę VAT.'; // Zmieniamy komunikat, jeśli to faktura
     } else if (issueInvoice && !customer) {
         return res.status(400).json({ error: 'Aby wystawić fakturę, podaj e-mail zarejestrowanego klienta!' });
     }
 
-    // Odjęcie paliwa ze zbiornika
     await prisma.fuel.update({
       where: { id: fuel.id },
       data: { tankLevel: { decrement: Number(quantity) } }
     });
 
-    // Wysłanie odpowiedniego komunikatu do kasjera
     if (paymentMethod === 'Punkty') {
-         res.status(201).json({ message: `Opłacono punktami! Pobrano ${pointsDeducted} pkt.${invoiceMsg}` });
+         res.status(201).json({ message: `Opłacono punktami! Pobrano ${pointsDeducted} pkt.${documentMsg}` });
     } else {
-         res.status(201).json({ message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt!` : ''}${invoiceMsg}` });
+         res.status(201).json({ message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt! ` : ''}${documentMsg}` });
     }
     
   } catch (error) {
@@ -329,6 +326,7 @@ app.post('/api/transactions/fuel', async (req, res) => {
     res.status(500).json({ error: 'Błąd podczas transakcji.' });
   }
 });
+
 // ==========================================
 // MODUŁ PRACOWNIKA (ZARZĄDZANIE MYJNIĄ)
 // ==========================================

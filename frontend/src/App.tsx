@@ -26,7 +26,7 @@ function App() {
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [fuels, setFuels] = useState<Fuel[]>([]);
   
-  // ZMIANA: Stany do obsługi nowej kasy POS
+  // Stan do obsługi kasy POS
   const [posData, setPosData] = useState({ fuelId: '', quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false });
   const [posCustomerQuery, setPosCustomerQuery] = useState('');
   const [posVerifiedCustomer, setPosVerifiedCustomer] = useState<{ email: string, firstName: string, loyaltyPoints: number } | null>(null);
@@ -106,7 +106,6 @@ function App() {
       const data = await res.json(); 
       if (res.ok) { 
         setMessage('✅ ' + data.message); 
-        // Reset kasy po udanej sprzedaży
         setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); 
         setPosVerifiedCustomer(null);
         setPosCustomerQuery('');
@@ -212,7 +211,7 @@ function App() {
                <input type="text" className="input-field" value={posCustomerQuery} onChange={e => setPosCustomerQuery(e.target.value)} placeholder="Wpisz dane i kliknij Sprawdź..." />
              </div>
              <button type="button" onClick={handleVerifyCustomer} className="btn btn-dark">Sprawdź</button>
-             
+             <button type="button" onClick={() => { setPosVerifiedCustomer(null); setPosCustomerQuery(''); setPosData({...posData, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false}); }} className="btn btn-light">Pomiń</button>
           </div>
 
           {posVerifiedCustomer && (
@@ -244,12 +243,11 @@ function App() {
               </div>
             </div>
 
-            {posVerifiedCustomer && (
-              <div className="flex-row text-left" style={{ justifyContent: 'flex-start', alignItems: 'center' }}>
-                <input type="checkbox" name="issueInvoice" id="issueInvoice" checked={posData.issueInvoice} onChange={handlePosChange} style={{ transform: 'scale(1.5)', margin: '10px' }} />
-                <label htmlFor="issueInvoice" className="text-bold">Wystaw Fakturę VAT</label>
-              </div>
-            )}
+            {/* ZMIANA: Faktura zawsze widoczna, niezależnie od tego czy skanowaliśmy klienta */}
+            <div className="flex-row text-left" style={{ justifyContent: 'flex-start', alignItems: 'center' }}>
+              <input type="checkbox" name="issueInvoice" id="issueInvoice" checked={posData.issueInvoice} onChange={handlePosChange} style={{ transform: 'scale(1.5)', margin: '10px' }} />
+              <label htmlFor="issueInvoice" className="text-bold">Wystaw Fakturę VAT</label>
+            </div>
 
             <button type="submit" className="btn btn-info" style={{ marginTop: '10px', fontSize: '18px' }}>Zatwierdź sprzedaż</button>
           </form>
