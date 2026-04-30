@@ -25,7 +25,11 @@ function App() {
   const [staffData, setStaffData] = useState({ login: '', password: '' });
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [fuels, setFuels] = useState<Fuel[]>([]);
-  const [posData, setPosData] = useState({ fuelId: '', quantity: 1, customerEmail: '', paymentMethod: 'Karta' });
+  
+  // ZMIANA: Stany do obsługi nowej kasy POS
+  const [posData, setPosData] = useState({ fuelId: '', quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false });
+  const [posCustomerQuery, setPosCustomerQuery] = useState('');
+  const [posVerifiedCustomer, setPosVerifiedCustomer] = useState<{ email: string, firstName: string, loyaltyPoints: number } | null>(null);
 
   // --- STANY WŁAŚCICIELA ---
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
@@ -35,10 +39,14 @@ function App() {
   // --- HANDLERY ---
   const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
   const handleStaffChange = (e: React.ChangeEvent<HTMLInputElement>) => setStaffData({ ...staffData, [e.target.name]: e.target.value });
-  const handlePosChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setPosData({ ...posData, [e.target.name]: e.target.value });
   const handleDeliveryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setNewDelivery({ ...newDelivery, [e.target.name]: e.target.value });
+  const handlePosChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') setPosData({ ...posData, [name]: (e.target as HTMLInputElement).checked });
+    else setPosData({ ...posData, [name]: value });
+  };
 
-  // --- POBIERANIE DANYCH (Poprawione catch(e)) ---
+  // --- POBIERANIE DANYCH ---
   const fetchServices = async () => { try { const res = await fetch('http://localhost:5000/api/services'); const data = await res.json(); setServices(data); if (data.length > 0) setSelectedService(String(data[0].id)); } catch (e) { console.error(e); } };
   const fetchFuels = async () => { try { const res = await fetch('http://localhost:5000/api/fuels'); const data = await res.json(); setFuels(data); if (data.length > 0) { setPosData(prev => ({ ...prev, fuelId: String(data[0].id) })); setNewDelivery(prev => ({ ...prev, fuelId: String(data[0].id) })); } } catch (e) { console.error(e); } };
   const fetchMyReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/my-reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setMyReservations(await res.json()); } catch (e) { console.error(e); } };
@@ -71,10 +79,45 @@ function App() {
     } catch (e) { console.error(e); setMessage('❌ Błąd połączenia z serwerem!'); }
   };
 
-  // --- AKCJE ---
+  // --- AKCJE KASY (POS) ---
+  const handleVerifyCustomer = async () => {
+    if (!posCustomerQuery) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/employee/customer/${encodeURIComponent(posCustomerQuery)}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok) {
+        setPosVerifiedCustomer(data);
+        setPosData({ ...posData, customerEmail: data.email });
+        setMessage('✅ Zweryfikowano klienta!');
+      } else {
+        setPosVerifiedCustomer(null);
+        setPosData({ ...posData, customerEmail: '' });
+        setMessage('❌ ' + data.error);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handlePOSSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try { 
+      const token = localStorage.getItem('token'); if (!token) return; 
+      const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); 
+      const data = await res.json(); 
+      if (res.ok) { 
+        setMessage('✅ ' + data.message); 
+        // Reset kasy po udanej sprzedaży
+        setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); 
+        setPosVerifiedCustomer(null);
+        setPosCustomerQuery('');
+        fetchFuels(); 
+      } else setMessage('❌ ' + data.error); 
+    } catch (e) { console.error(e); } 
+  };
+
+  // --- INNE AKCJE ---
   const handleReservation = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate }) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setReservationDate(''); fetchMyReservations(token); } } catch (e) { console.error(e); } };
   const handleCompleteReservation = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Status zmieniony!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };
-  const handlePOSSubmit = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setPosData({ ...posData, quantity: 1, customerEmail: '' }); fetchFuels(); } else setMessage('❌ ' + data.error); } catch (e) { console.error(e); } };
   const handleOrderDelivery = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/owner/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(newDelivery) }); if (res.ok) { setMessage('✅ Dostawa zlecona!'); fetchDeliveries(token); setNewDelivery({...newDelivery, deliveryDate: '', supplier: ''}); } } catch (e) { console.error(e); } };
   const handleCompleteDelivery = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/deliveries/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Paliwo dolane!'); fetchDeliveries(token); fetchFuels(); } } catch (e) { console.error(e); } };
   const handleUpdatePrice = async (id: number) => { if (!newPrice[id]) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/fuels/${id}/price`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ price: newPrice[id] }) }); if (res.ok) { setMessage('✅ Cena zmieniona!'); fetchFuels(); setNewPrice({ ...newPrice, [id]: 0 }); } } catch (e) { console.error(e); } };
@@ -83,13 +126,20 @@ function App() {
 
   const renderMessage = () => message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>;
 
+  // Obliczenia na żywo dla Kasy
+  const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
+  const costPLN = selectedFuel ? (selectedFuel.pricePerLiter * posData.quantity).toFixed(2) : '0.00';
+  const pointsCostPerLiter = selectedFuel?.type === 'LPG' ? 50 : 100;
+  const costPoints = Math.floor(posData.quantity) * pointsCostPerLiter;
+  const canAffordWithPoints = posVerifiedCustomer && posVerifiedCustomer.loyaltyPoints >= costPoints;
+
   // ==============================================
   // WIDOK 1: PANEL WŁAŚCICIELA
   // ==============================================
   if (userRole === 'owner') {
     return (
-      <div className="app-container" >
-        <h2 >Witaj, {loggedInUser}! (Panel Właściciela) 💼</h2>
+      <div className="app-container">
+        <h2>Witaj, {loggedInUser}! (Panel Właściciela) 💼</h2>
         
         <div className="card card-danger">
           <h3>Zarządzanie Cennikiem i Magazynem 📈</h3>
@@ -154,16 +204,54 @@ function App() {
         
         <div className="card card-info">
           <h3>Kasa Fiskalna (Sprzedaż Paliwa) ⛽</h3>
+          
+          {/* KROK 1: Identyfikacja klienta */}
+          <div className="flex-row text-left" style={{ alignItems: 'flex-end', marginBottom: '15px' }}>
+             <div style={{ flex: 1 }}>
+               <label>1. Skanuj klienta (E-mail lub Telefon):</label>
+               <input type="text" className="input-field" value={posCustomerQuery} onChange={e => setPosCustomerQuery(e.target.value)} placeholder="Wpisz dane i kliknij Sprawdź..." />
+             </div>
+             <button type="button" onClick={handleVerifyCustomer} className="btn btn-dark">Sprawdź</button>
+             
+          </div>
+
+          {posVerifiedCustomer && (
+             <div style={{ padding: '10px', backgroundColor: '#d4edda', borderRadius: '5px', marginBottom: '20px', border: '1px solid #c3e6cb', color: '#155724' }}>
+                <strong>Zweryfikowano:</strong> {posVerifiedCustomer.firstName} | <strong>Dostępne punkty:</strong> {posVerifiedCustomer.loyaltyPoints} pkt
+             </div>
+          )}
+
+          {/* KROK 2: Szczegóły transakcji */}
           <form onSubmit={handlePOSSubmit} className="flex-col">
             <div className="flex-row text-left">
-              <div style={{ flex: 1 }}><label>Paliwo:</label><select name="fuelId" className="select-field" value={posData.fuelId} onChange={handlePosChange}>{fuels.map(f => <option key={f.id} value={f.id}>{f.type} - {f.pricePerLiter} zł/l (Dostępne: {f.tankLevel} l)</option>)}</select></div>
+              <div style={{ flex: 1 }}><label>2. Wybierz paliwo:</label><select name="fuelId" className="select-field" value={posData.fuelId} onChange={handlePosChange}>{fuels.map(f => <option key={f.id} value={f.id}>{f.type} - {f.pricePerLiter} zł/l (Dostępne: {f.tankLevel} l)</option>)}</select></div>
               <div style={{ flex: 1 }}><label>Ilość (L):</label><input type="number" name="quantity" className="input-field" min="1" step="0.01" value={posData.quantity} onChange={handlePosChange} required /></div>
             </div>
-            <div className="flex-row text-left">
-              <div style={{ flex: 1 }}><label>Płatność:</label><select name="paymentMethod" className="select-field" value={posData.paymentMethod} onChange={handlePosChange}><option>Karta</option><option>Gotówka</option></select></div>
-              <div style={{ flex: 1 }}><label>Email (Punkty):</label><input type="email" name="customerEmail" className="input-field" placeholder="Opcjonalnie" value={posData.customerEmail} onChange={handlePosChange} /></div>
+            
+            <div style={{ padding: '15px', backgroundColor: '#e9ecef', borderRadius: '5px', fontSize: '18px' }}>
+              <strong>Do zapłaty:</strong> {costPLN} zł 
+              {posVerifiedCustomer && (<span> albo <strong>{costPoints} pkt</strong></span>)}
             </div>
-            <button type="submit" className="btn btn-info">Zatwierdź sprzedaż</button>
+
+            <div className="flex-row text-left">
+              <div style={{ flex: 1 }}>
+                <label>3. Płatność:</label>
+                <select name="paymentMethod" className="select-field" value={posData.paymentMethod} onChange={handlePosChange}>
+                  <option value="Karta">Karta</option>
+                  <option value="Gotówka">Gotówka</option>
+                  {posVerifiedCustomer && <option value="Punkty" disabled={!canAffordWithPoints}>Punkty Lojalnościowe {canAffordWithPoints ? '' : '(Zbyt mało)'}</option>}
+                </select>
+              </div>
+            </div>
+
+            {posVerifiedCustomer && (
+              <div className="flex-row text-left" style={{ justifyContent: 'flex-start', alignItems: 'center' }}>
+                <input type="checkbox" name="issueInvoice" id="issueInvoice" checked={posData.issueInvoice} onChange={handlePosChange} style={{ transform: 'scale(1.5)', margin: '10px' }} />
+                <label htmlFor="issueInvoice" className="text-bold">Wystaw Fakturę VAT</label>
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-info" style={{ marginTop: '10px', fontSize: '18px' }}>Zatwierdź sprzedaż</button>
           </form>
         </div>
 
