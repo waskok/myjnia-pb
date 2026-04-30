@@ -5,26 +5,22 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-// 1. Wczytujemy ukryty plik .env z naszym linkiem do Neona
 dotenv.config(); 
 
 const app = express();
-
-// TUTAJ JEST ZMIANA: Czyste i proste wywołanie PrismaClient
 const prisma = new PrismaClient();
-
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors()); // Pozwala na łączenie się frontendu z backendem
-app.use(express.json()); // Pozwala odczytywać dane z formularzy w formacie JSON
+app.use(cors()); 
+app.use(express.json()); 
 
-// Prosty endpoint testowy
+// ==========================================
+// ENDPOINTY TESTOWE
+// ==========================================
 app.get('/api/status', (req, res) => {
   res.json({ message: 'Serwer myjni PB działa i jest gotowy na żądania!' });
 });
 
-// Endpoint testujący połączenie z bazą danych
 app.get('/api/db-check', async (req, res) => {
   try {
     const ownersCount = await prisma.owner.count();
@@ -34,150 +30,24 @@ app.get('/api/db-check', async (req, res) => {
   }
 });
 
-
 // ==========================================
-// MODUŁ KASJERA (POS) I SPRZEDAŻY
+// AUTORYZACJA KLIENTA
 // ==========================================
-
-// 1. Pobieranie cennika paliw
-app.get('/api/fuels', async (req, res) => {
-  try {
-    const fuels = await prisma.fuel.findMany();
-    res.json(fuels);
-  } catch (error) {
-    res.status(500).json({ error: 'Błąd pobierania paliw' });
-  }
-});
-
-// 2. Przetwarzanie transakcji na kasie (paliwo + punkty)
-app.post('/api/transactions/fuel', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
-    const token = authHeader.split(' ')[1];
-    if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
-
-    if (decoded.role !== 'employee') {
-      return res.status(403).json({ error: 'Brak uprawnień kasjera!' });
-    }
-
-    const { fuelId, quantity, customerEmail, paymentMethod } = req.body;
-
-    if (!fuelId || !quantity || !paymentMethod) {
-      return res.status(400).json({ error: 'Brakujące dane transakcji!' });
-    }
-
-    // Pobieramy dane paliwa
-    const fuel = await prisma.fuel.findUnique({ where: { id: Number(fuelId) } });
-    if (!fuel) return res.status(404).json({ error: 'Paliwo nie znalezione!' });
-
-    if (fuel.tankLevel < quantity) {
-      return res.status(400).json({ error: 'Brak wystarczającej ilości paliwa w zbiorniku!' });
-    }
-
-    const totalAmount = fuel.pricePerLiter * quantity;
-    let customer = null;
-    let pointsEarned = 0;
-
-    // Jeśli podano email klienta, szukamy go w bazie, by dodać punkty
-    if (customerEmail) {
-      customer = await prisma.customer.findUnique({ where: { email: customerEmail } });
-      if (customer) {
-        const loyalty = await prisma.loyaltyProgram.findFirst();
-        if (loyalty) {
-          // Obliczanie punktów (zgodnie ze specyfikacją PB)
-          if (fuel.type === 'LPG') {
-            pointsEarned = Math.floor(quantity) * loyalty.pointsPerLpg;
-          } else {
-            pointsEarned = Math.floor(quantity) * loyalty.pointsPerE95;
-          }
-
-          // Dodajemy punkty do konta klienta
-          await prisma.customer.update({
-            where: { id: customer.id },
-            data: { loyaltyPoints: { increment: pointsEarned } }
-          });
-        }
-      }
-    }
-
-    // Zapisujemy całą transakcję w historii
-    const transaction = await prisma.transaction.create({
-      data: {
-        employeeId: decoded.id,
-        customerId: customer ? customer.id : null,
-        date: new Date(),
-        totalAmount: totalAmount,
-        paymentMethod: paymentMethod,
-        items: {
-          create: [
-            {
-              product: `Paliwo ${fuel.type}`,
-              quantity: Number(quantity),
-              unitPrice: fuel.pricePerLiter,
-              value: totalAmount
-            }
-          ]
-        }
-      }
-    });
-
-    // Odejmowanie sprzedanego paliwa ze zbiornika
-    await prisma.fuel.update({
-      where: { id: fuel.id },
-      data: { tankLevel: { decrement: Number(quantity) } }
-    });
-
-    res.status(201).json({ 
-      message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt!` : ''}` 
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Błąd podczas transakcji.' });
-  }
-});
-
-
-app.listen(PORT, () => {
-  console.log(`🚀 Serwer uruchomiony pod adresem: http://localhost:${PORT}`);
-});
-
-// Endpoint do rejestracji użytkownika
 app.post('/api/register', async (req, res) => {
   try {
-    // 1. Pobieramy dane wysłane z formularza na frontendzie
     const { firstName, lastName, address, phone, email, password } = req.body;
-
-    // 2. Sprawdzamy, czy wszystkie wymagane pola zostały wypełnione
     if (!firstName || !lastName || !address || !phone || !email || !password) {
       return res.status(400).json({ error: 'Wszystkie pola są wymagane!' });
     }
 
-    // 3. Sprawdzamy, czy użytkownik z takim emailem już istnieje w bazie
-    const existingUser = await prisma.customer.findUnique({
-      where: { email }
-    });
-
+    const existingUser = await prisma.customer.findUnique({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ error: 'Użytkownik o podanym adresie e-mail już istnieje!' });
     }
 
-    // 4. Szyfrujemy hasło paczką bcrypt (10 to poziom skomplikowania szyfrowania)
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 5. Zapisujemy nowego klienta w bazie Neona
     const newCustomer = await prisma.customer.create({
-      data: {
-        firstName,
-        lastName,
-        address,
-        phone,
-        email,
-        password: hashedPassword,
-        registered: true // Oznaczamy, że to klient zarejestrowany
-      }
+      data: { firstName, lastName, address, phone, email, password: hashedPassword, registered: true }
     });
 
     res.status(201).json({ message: 'Rejestracja zakończona sukcesem!' });
@@ -187,54 +57,77 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// Endpoint do logowania użytkownika
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Podaj adres e-mail i hasło!' });
 
-    // 1. Sprawdzamy, czy użytkownik w ogóle coś wpisał
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Podaj adres e-mail i hasło!' });
-    }
+    const user = await prisma.customer.findUnique({ where: { email } });
+    if (!user || !user.password) return res.status(401).json({ error: 'Nieprawidłowy e-mail lub hasło!' });
 
-    // 2. Szukamy klienta w bazie po emailu
-    const user = await prisma.customer.findUnique({
-      where: { email }
-    });
-
-    // Jeśli nie ma takiego użytkownika lub nie ma ustawionego hasła
-    if (!user || !user.password) {
-      return res.status(401).json({ error: 'Nieprawidłowy e-mail lub hasło!' });
-    }
-
-    // 3. Porównujemy wpisane hasło z tym zaszyfrowanym w bazie
     const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) return res.status(401).json({ error: 'Nieprawidłowy e-mail lub hasło!' });
 
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Nieprawidłowy e-mail lub hasło!' });
-    }
-
-    // 4. Jeśli wszystko gra, generujemy token JWT
-    // Token działa jak wirtualna opaska na rękę w klubie
     const token = jwt.sign(
-      { id: user.id, email: user.email }, // Informacje wewnątrz tokena
-      process.env.JWT_SECRET as string,   // Tajny klucz szyfrujący z pliku .env
-      { expiresIn: '2h' }                 // Czas "życia" tokena (2 godziny)
+      { id: user.id, email: user.email }, 
+      process.env.JWT_SECRET as string, 
+      { expiresIn: '2h' }
     );
 
-    // 5. Wysyłamy sukces i token do przeglądarki
-    res.status(200).json({ 
-      message: 'Zalogowano pomyślnie!', 
-      token: token,
-      user: { firstName: user.firstName, lastName: user.lastName } // Odsyłamy też imię do powitania
-    });
-
+    res.status(200).json({ message: 'Zalogowano pomyślnie!', token, user: { firstName: user.firstName, lastName: user.lastName } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd serwera podczas logowania.' });
   }
 });
-// Endpoint do pobierania cennika usług myjni
+
+// ==========================================
+// WSPÓLNE LOGOWANIE SŁUŻBOWE (SZEF / PRACOWNIK)
+// ==========================================
+app.post('/api/staff/login', async (req, res) => {
+  try {
+    const { login, password } = req.body;
+    if (!login || !password) return res.status(400).json({ error: 'Podaj login i hasło!' });
+
+    // 1. Sprawdzamy, czy to Właściciel
+    const owner = await prisma.owner.findUnique({ where: { login } });
+    if (owner) {
+      const isPasswordValid = await bcrypt.compare(password, owner.password);
+      if (isPasswordValid) {
+        const token = jwt.sign(
+          { id: owner.id, login: owner.login, role: 'owner' },
+          process.env.JWT_SECRET as string,
+          { expiresIn: '8h' }
+        );
+        return res.status(200).json({ message: 'Zalogowano do panelu Właściciela!', token, user: { firstName: owner.firstName, role: 'owner' } });
+      }
+    }
+
+    // 2. Jeśli to nie Właściciel, sprawdzamy Pracownika
+    const employee = await prisma.employee.findUnique({ where: { login } });
+    if (employee) {
+      const isPasswordValid = await bcrypt.compare(password, employee.password);
+      if (isPasswordValid) {
+        const token = jwt.sign(
+          { id: employee.id, login: employee.login, role: 'employee' },
+          process.env.JWT_SECRET as string,
+          { expiresIn: '8h' }
+        );
+        return res.status(200).json({ message: 'Zalogowano do panelu Pracownika!', token, user: { firstName: employee.firstName, role: 'employee' } });
+      }
+    }
+
+    // 3. Brak konta / złe hasło
+    return res.status(401).json({ error: 'Nieprawidłowy login lub hasło!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd logowania służbowego.' });
+  }
+});
+
+// ==========================================
+// MODUŁ KLIENTA (USŁUGI I REZERWACJE)
+// ==========================================
 app.get('/api/services', async (req, res) => {
   try {
     const services = await prisma.washService.findMany();
@@ -244,25 +137,14 @@ app.get('/api/services', async (req, res) => {
   }
 });
 
-// Endpoint do tworzenia rezerwacji
 app.post('/api/reservations', async (req, res) => {
   try {
     const { token, washServiceId, date } = req.body;
+    if (!token || !washServiceId || !date) return res.status(400).json({ error: 'Brakujące dane rezerwacji!' });
 
-    if (!token || !washServiceId || !date) {
-      return res.status(400).json({ error: 'Brakujące dane rezerwacji!' });
-    }
-
-    // Dodane "as string", żeby upewnić TS, że token to tekst
     const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
-
-    const reservation = await prisma.reservation.create({
-      data: {
-        customerId: decoded.id,
-        washServiceId: Number(washServiceId),
-        date: new Date(date),
-        status: 'Oczekująca'
-      }
+    await prisma.reservation.create({
+      data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: new Date(date), status: 'Oczekująca' }
     });
 
     res.status(201).json({ message: 'Rezerwacja potwierdzona i zapisana w bazie!' });
@@ -272,23 +154,14 @@ app.post('/api/reservations', async (req, res) => {
   }
 });
 
-// Endpoint do pobierania historii rezerwacji zalogowanego klienta
 app.get('/api/my-reservations', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Brak autoryzacji!' });
-    }
-
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1]; 
-    
-    // ZABEZPIECZENIE: Sprawdzamy czy token na pewno istnieje po podziale stringa
-    if (!token) {
-      return res.status(401).json({ error: 'Brak poprawnego tokena!' });
-    }
+    if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
-
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
     const userReservations = await prisma.reservation.findMany({
       where: { customerId: decoded.id },
       include: { washService: true }, 
@@ -303,76 +176,95 @@ app.get('/api/my-reservations', async (req, res) => {
 });
 
 // ==========================================
-// MODUŁ PRACOWNIKA
+// MODUŁ KASJERA (POS) I SPRZEDAŻY
 // ==========================================
-
-// 1. Logowanie pracownika
-app.post('/api/employee/login', async (req, res) => {
+app.get('/api/fuels', async (req, res) => {
   try {
-    const { login, password } = req.body;
-
-    if (!login || !password) {
-      return res.status(400).json({ error: 'Podaj login i hasło!' });
-    }
-
-    // Szukamy pracownika po loginie
-    const employee = await prisma.employee.findUnique({
-      where: { login }
-    });
-
-    if (!employee) {
-      return res.status(401).json({ error: 'Nieprawidłowy login lub hasło!' });
-    }
-
-    // Sprawdzamy hasło
-    const isPasswordValid = await bcrypt.compare(password, employee.password);
-
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Nieprawidłowy login lub hasło!' });
-    }
-
-    // Generujemy token (dodajemy info, że to pracownik)
-    const token = jwt.sign(
-      { id: employee.id, login: employee.login, role: 'employee' },
-      process.env.JWT_SECRET as string,
-      { expiresIn: '8h' } // Pracownik ma dłuższą sesję na całą zmianę
-    );
-
-    res.status(200).json({ 
-      message: 'Zalogowano do panelu pracownika!', 
-      token: token,
-      user: { firstName: employee.firstName, role: 'employee' }
-    });
-
+    const fuels = await prisma.fuel.findMany();
+    res.json(fuels);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Błąd logowania pracownika.' });
+    res.status(500).json({ error: 'Błąd pobierania paliw' });
   }
 });
 
-// 2. Pobieranie wszystkich rezerwacji z systemu
+app.post('/api/transactions/fuel', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+
+    if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień kasjera!' });
+
+    const { fuelId, quantity, customerEmail, paymentMethod } = req.body;
+    if (!fuelId || !quantity || !paymentMethod) return res.status(400).json({ error: 'Brakujące dane transakcji!' });
+
+    const fuel = await prisma.fuel.findUnique({ where: { id: Number(fuelId) } });
+    if (!fuel) return res.status(404).json({ error: 'Paliwo nie znalezione!' });
+    if (fuel.tankLevel < quantity) return res.status(400).json({ error: 'Brak wystarczającej ilości paliwa w zbiorniku!' });
+
+    const totalAmount = fuel.pricePerLiter * quantity;
+    let customer = null;
+    let pointsEarned = 0;
+
+    if (customerEmail) {
+      customer = await prisma.customer.findUnique({ where: { email: customerEmail } });
+      if (customer) {
+        const loyalty = await prisma.loyaltyProgram.findFirst();
+        if (loyalty) {
+          if (fuel.type === 'LPG') pointsEarned = Math.floor(quantity) * loyalty.pointsPerLpg;
+          else pointsEarned = Math.floor(quantity) * loyalty.pointsPerE95;
+
+          await prisma.customer.update({
+            where: { id: customer.id },
+            data: { loyaltyPoints: { increment: pointsEarned } }
+          });
+        }
+      }
+    }
+
+    await prisma.transaction.create({
+      data: {
+        employeeId: decoded.id,
+        customerId: customer ? customer.id : null,
+        date: new Date(),
+        totalAmount: totalAmount,
+        paymentMethod: paymentMethod,
+        items: {
+          create: [{ product: `Paliwo ${fuel.type}`, quantity: Number(quantity), unitPrice: fuel.pricePerLiter, value: totalAmount }]
+        }
+      }
+    });
+
+    await prisma.fuel.update({
+      where: { id: fuel.id },
+      data: { tankLevel: { decrement: Number(quantity) } }
+    });
+
+    res.status(201).json({ message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt!` : ''}` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd podczas transakcji.' });
+  }
+});
+
+// ==========================================
+// MODUŁ PRACOWNIKA (ZARZĄDZANIE MYJNIĄ)
+// ==========================================
 app.get('/api/employee/reservations', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
-
     const token = authHeader.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień.' });
 
-    // Zabezpieczenie: tylko pracownik może to zobaczyć
-    if (decoded.role !== 'employee') {
-      return res.status(403).json({ error: 'Brak uprawnień. Zaloguj się jako pracownik.' });
-    }
-
-    // Pobieramy absolutnie wszystkie rezerwacje + dane klienta i usługi
     const allReservations = await prisma.reservation.findMany({
-      include: { 
-        washService: true,
-        customer: { select: { firstName: true, lastName: true, phone: true } } 
-      },
-      orderBy: { date: 'asc' } // Od najstarszych do obsłużenia
+      include: { washService: true, customer: { select: { firstName: true, lastName: true, phone: true } } },
+      orderBy: { date: 'asc' }
     });
 
     res.status(200).json(allReservations);
@@ -382,28 +274,18 @@ app.get('/api/employee/reservations', async (req, res) => {
   }
 });
 
-// 3. Zmiana statusu na "Zakończona"
 app.patch('/api/employee/reservations/:id/complete', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
-
     const token = authHeader.split(' ')[1];
-    
-    // ZABEZPIECZENIE: Sprawdzamy, czy token istnieje
     if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
 
-    // RZUTOWANIE: Upewniamy TypeScript, że token to na pewno tekst (as string)
     const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
-
-    if (decoded.role !== 'employee') {
-      return res.status(403).json({ error: 'Brak uprawnień!' });
-    }
-
-    const reservationId = req.params.id;
+    if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień!' });
 
     await prisma.reservation.update({
-      where: { id: Number(reservationId) },
+      where: { id: Number(req.params.id) },
       data: { status: 'Zakończona' }
     });
 
@@ -412,4 +294,97 @@ app.patch('/api/employee/reservations/:id/complete', async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Błąd aktualizacji statusu.' });
   }
+});
+
+// ==========================================
+// MODUŁ WŁAŚCICIELA (SZEFA)
+// ==========================================
+app.get('/api/owner/deliveries', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+
+    const deliveries = await prisma.fuelDelivery.findMany({
+      include: { fuel: true, owner: { select: { firstName: true, lastName: true } } },
+      orderBy: { deliveryDate: 'desc' }
+    });
+    res.json(deliveries);
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania dostaw.' });
+  }
+});
+
+app.post('/api/owner/deliveries', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Tylko właściciel może zlecać dostawy!' });
+
+    const { fuelId, quantity, supplier, deliveryDate } = req.body;
+    if (!fuelId || !quantity || !supplier || !deliveryDate) return res.status(400).json({ error: 'Brakujące dane dostawy!' });
+
+    await prisma.fuelDelivery.create({
+      data: {
+        fuelId: Number(fuelId),
+        ownerId: decoded.id,
+        quantity: Number(quantity),
+        supplier: supplier,
+        deliveryDate: new Date(deliveryDate),
+        status: 'Zlecona'
+      }
+    });
+    res.status(201).json({ message: 'Pomyślnie zlecono dostawę paliwa!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd podczas zlecania dostawy.' });
+  }
+});
+
+app.patch('/api/owner/deliveries/:id/complete', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+
+    const id = Number(req.params.id);
+    const delivery = await prisma.fuelDelivery.findUnique({ where: { id } });
+    if (!delivery || delivery.status === 'Dostarczona') return res.status(400).json({ error: 'Dostawa nie istnieje lub już odebrana!' });
+
+    await prisma.fuel.update({
+      where: { id: delivery.fuelId },
+      data: { tankLevel: { increment: delivery.quantity } }
+    });
+
+    await prisma.fuelDelivery.update({
+      where: { id },
+      data: { status: 'Dostarczona' }
+    });
+
+    res.status(200).json({ message: 'Dostawa odebrana. Paliwo znajduje się w zbiornikach!' });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd podczas odbioru dostawy.' });
+  }
+});
+
+app.patch('/api/owner/fuels/:id/price', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+
+    const { price } = req.body;
+    await prisma.fuel.update({
+      where: { id: Number(req.params.id) },
+      data: { pricePerLiter: Number(price) }
+    });
+    res.status(200).json({ message: 'Cena paliwa została zaktualizowana!' });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd podczas aktualizacji ceny.' });
+  }
+});
+
+// START SERWERA
+app.listen(PORT, () => {
+  console.log(`🚀 Serwer uruchomiony pod adresem: http://localhost:${PORT}`);
 });
