@@ -453,6 +453,83 @@ app.get('/api/owner/customers', async (req, res) => {
   }
 });
 
+// ==========================================
+// MODUŁ RAPORTÓW WŁAŚCICIELA
+// ==========================================
+app.get('/api/owner/reports', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    // Odczytujemy filtry z zapytania (np. period=monthly, date=2026-05-01)
+    const { period, date } = req.query;
+    let dateFilter: any = {};
+
+    if (period && period !== 'all' && date) {
+      const targetDate = new Date(date as string);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      const day = targetDate.getDate();
+
+      let startDate: Date;
+      let endDate: Date;
+
+      if (period === 'daily') {
+        startDate = new Date(year, month, day, 0, 0, 0);
+        endDate = new Date(year, month, day, 23, 59, 59, 999);
+      } else if (period === 'monthly') {
+        startDate = new Date(year, month, 1, 0, 0, 0);
+        endDate = new Date(year, month + 1, 0, 23, 59, 59, 999); // Ostatni dzień miesiąca
+      } else { // yearly
+        startDate = new Date(year, 0, 1, 0, 0, 0);
+        endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+      }
+
+      dateFilter = {
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      };
+    }
+
+    // 1. Obliczanie całkowitego utargu w zadanym oknie czasowym
+    const revenueStats = await prisma.transaction.aggregate({
+      _sum: { totalAmount: true },
+      where: dateFilter
+    });
+
+    // 2. Liczba transakcji w zadanym oknie
+    const transactionCount = await prisma.transaction.count({
+      where: dateFilter
+    });
+
+    // 3. Pobranie transakcji z detalami
+    // Jeśli wybieramy konkretny okres, pobieramy do 100 transakcji. Jeśli "cały czas" - ostatnie 15.
+    const recentTransactions = await prisma.transaction.findMany({
+      take: period === 'all' ? 15 : 100,
+      where: dateFilter,
+      orderBy: { date: 'desc' },
+      include: {
+        customer: { select: { firstName: true, lastName: true } },
+        employee: { select: { firstName: true, lastName: true } }
+      }
+    });
+
+    res.json({
+      totalRevenue: revenueStats._sum.totalAmount || 0,
+      totalCount: transactionCount,
+      transactions: recentTransactions
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd generowania raportów.' });
+  }
+});
 app.get('/api/owner/deliveries', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;

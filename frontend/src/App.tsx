@@ -9,17 +9,19 @@ interface Reservation { id: number; date: string; status: string; washService: W
 interface Fuel { id: number; type: string; pricePerLiter: number; tankLevel: number; maxLevel: number; percentage?: string; }
 interface Delivery { id: number; fuel: Fuel; quantity: number; status: string; deliveryDate: string; supplier: string; owner?: { firstName: string; lastName: string; } }
 interface MonitoringData { fuels: Fuel[]; lpg: { pressure: string; temp: string; }; carWash: { bay: number; occupied: boolean; camera: string; }[]; alerts: string[]; }
+interface Transaction { id: number; totalAmount: number; date: string; paymentMethod: string; customer?: { firstName: string; lastName: string; }; employee: { firstName: string; lastName: string; }; }
+interface ReportData { totalRevenue: number; totalCount: number; transactions: Transaction[]; }
+
+type ReportPeriodType = 'all' | 'daily' | 'monthly' | 'yearly';
 
 function App() {
   const [message, setMessage] = useState('');
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
   
-  // ZAKŁADKI WŁAŚCICIELA I PRACOWNIKA (Tutaj dodano 'monitoring')
-  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring'>('paliwa');
+  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring' | 'raporty'>('paliwa');
   const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring'>('pos');
 
-  // --- STANY KLIENTA ---
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', address: '', phone: '', email: '', password: '' });
   const [services, setServices] = useState<WashService[]>([]);
@@ -27,7 +29,6 @@ function App() {
   const [reservationDate, setReservationDate] = useState('');
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
 
-  // --- STANY SŁUŻBOWE ---
   const [loginMode, setLoginMode] = useState<'customer' | 'staff'>('customer');
   const [staffData, setStaffData] = useState({ login: '', password: '' });
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
@@ -37,7 +38,6 @@ function App() {
   const [posCustomerQuery, setPosCustomerQuery] = useState('');
   const [posVerifiedCustomer, setPosVerifiedCustomer] = useState<Customer | null>(null);
 
-  // --- STANY WŁAŚCICIELA I MONITORINGU ---
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [newDelivery, setNewDelivery] = useState({ fuelId: '', quantity: 1000, supplier: '', deliveryDate: '' });
   const [newPrice, setNewPrice] = useState<{ [key: number]: number }>({});
@@ -45,6 +45,10 @@ function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [newEmployee, setNewEmployee] = useState({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' });
   const [monitoringData, setMonitoringData] = useState<MonitoringData | null>(null);
+  
+  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [reportPeriod, setReportPeriod] = useState<ReportPeriodType>('all');
+  const [reportDateStr, setReportDateStr] = useState<string>(new Date().toISOString().substring(0, 10)); 
 
   // --- HANDLERY ZMIAN ---
   const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -64,15 +68,19 @@ function App() {
   const fetchDeliveries = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/deliveries', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setDeliveries(await res.json()); } catch (e) { console.error(e); } };
   const fetchEmployees = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/employees', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setEmployees(await res.json()); } catch (e) { console.error(e); } };
   const fetchCustomers = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/customers', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setCustomers(await res.json()); } catch (e) { console.error(e); } };
-  
-  // POBIERANIE MONITORINGU
-  const fetchMonitoring = async () => { 
+  const fetchMonitoring = async () => { const token = localStorage.getItem('token'); if (!token) return; try { const res = await fetch('http://localhost:5000/api/monitoring', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setMonitoringData(await res.json()); } catch (e) { console.error(e); } };
+
+  const fetchReports = async (period = reportPeriod, dateVal = reportDateStr) => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    try { 
-      const res = await fetch('http://localhost:5000/api/monitoring', { headers: { 'Authorization': `Bearer ${token}` } }); 
-      if (res.ok) setMonitoringData(await res.json()); 
-    } catch (e) { console.error(e); } 
+    try {
+      let url = 'http://localhost:5000/api/owner/reports';
+      if (period !== 'all') {
+        url += `?period=${period}&date=${dateVal}`;
+      }
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) setReportData(await res.json());
+    } catch (e) { console.error(e); }
   };
 
   // --- LOGOWANIE ---
@@ -96,104 +104,81 @@ function App() {
           if (data.user.role === 'owner') { 
             setActiveTab('paliwa');
             fetchFuels(); fetchDeliveries(data.token); fetchEmployees(data.token); fetchCustomers(data.token);
-          }
-          else if (data.user.role === 'employee') { 
+          } else if (data.user.role === 'employee') { 
             setActiveEmpTab('pos');
             fetchFuels(); fetchAllReservations(data.token); 
-          }
-          else { fetchServices(); fetchMyReservations(data.token); }
+          } else { fetchServices(); fetchMyReservations(data.token); }
         } else { setIsLogin(true); setFormData({ ...formData, password: '' }); }
       } else setMessage('❌ ' + data.error);
     } catch (e) { console.error(e); setMessage('❌ Błąd połączenia z serwerem!'); }
   };
 
   // --- AKCJE KASY I INNE ---
-  const handleVerifyCustomer = async () => {
-    if (!posCustomerQuery) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/employee/customer/${encodeURIComponent(posCustomerQuery)}`, { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
-      if (res.ok) {
-        setPosVerifiedCustomer(data); setPosData({ ...posData, customerEmail: data.email }); setMessage('✅ Zweryfikowano klienta!');
-      } else {
-        setPosVerifiedCustomer(null); setPosData({ ...posData, customerEmail: '' }); setMessage('❌ ' + data.error);
-      }
-    } catch (e) { console.error(e); }
-  };
-
-  const handlePOSSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try { 
-      const token = localStorage.getItem('token'); if (!token) return; 
-      const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); 
-      const data = await res.json(); 
-      if (res.ok) { 
-        setMessage('✅ ' + data.message); 
-        setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); 
-        setPosVerifiedCustomer(null); setPosCustomerQuery(''); fetchFuels(); 
-      } else setMessage('❌ ' + data.error); 
-    } catch (e) { console.error(e); } 
-  };
-
+  const handleVerifyCustomer = async () => { if (!posCustomerQuery) return; try { const token = localStorage.getItem('token'); const res = await fetch(`http://localhost:5000/api/employee/customer/${encodeURIComponent(posCustomerQuery)}`, { headers: { 'Authorization': `Bearer ${token}` } }); const data = await res.json(); if (res.ok) { setPosVerifiedCustomer(data); setPosData({ ...posData, customerEmail: data.email }); setMessage('✅ Zweryfikowano!'); } else { setPosVerifiedCustomer(null); setPosData({ ...posData, customerEmail: '' }); setMessage('❌ ' + data.error); } } catch (e) { console.error(e); } };
+  const handlePOSSubmit = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); setPosVerifiedCustomer(null); setPosCustomerQuery(''); fetchFuels(); } else setMessage('❌ ' + data.error); } catch (e) { console.error(e); } };
   const handleReservation = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate }) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setReservationDate(''); fetchMyReservations(token); } } catch (e) { console.error(e); } };
   const handleCompleteReservation = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Zakończono!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };
   const handleOrderDelivery = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/owner/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(newDelivery) }); if (res.ok) { setMessage('✅ Zlecono!'); fetchDeliveries(token); setNewDelivery({...newDelivery, deliveryDate: '', supplier: ''}); } } catch (e) { console.error(e); } };
   const handleCompleteDelivery = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/deliveries/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Odebrano!'); fetchDeliveries(token); fetchFuels(); } } catch (e) { console.error(e); } };
   const handleUpdatePrice = async (id: number) => { if (!newPrice[id]) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/fuels/${id}/price`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ price: newPrice[id] }) }); if (res.ok) { setMessage('✅ Zmieniono!'); fetchFuels(); setNewPrice({ ...newPrice, [id]: 0 }); } } catch (e) { console.error(e); } };
-
   const handleAddEmployee = async (e: React.FormEvent) => { e.preventDefault(); const token = localStorage.getItem('token'); try { const res = await fetch('http://localhost:5000/api/owner/employees', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(newEmployee) }); if (res.ok) { setMessage('✅ Dodano!'); setNewEmployee({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' }); if(token) fetchEmployees(token); } else { const err = await res.json(); setMessage('❌ ' + err.error); } } catch (e) { console.error(e); } };
   const handleDeleteEmployee = async (id: number) => { if (!window.confirm('Usunąć?')) return; const token = localStorage.getItem('token'); try { const res = await fetch(`http://localhost:5000/api/owner/employees/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { if(token) fetchEmployees(token); setMessage('✅ Usunięto.'); } } catch (e) { console.error(e); } };
 
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
   const renderMessage = () => message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>;
 
-  // --- RENDEROWANIE ZAKŁADKI MONITORINGU ---
+  // --- RENDEROWANIE MONITORINGU (POTĘŻNY INLINE CSS DLA PEWNOŚCI) ---
   const renderMonitoringTab = () => (
-    <div className="card card-light" style={{ borderColor: '#6c757d' }}>
-      <div className="flex-space-between mb-20">
-        <h3 style={{ margin: 0 }}>Centrum Monitoringu PB 📡</h3>
+    <div style={{ background: '#fff', border: '1px solid #ced4da', borderRadius: '8px', padding: '20px', marginTop: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0, color: '#343a40' }}>Centrum Monitoringu PB 📡</h3>
         <button onClick={fetchMonitoring} className="btn btn-dark">Odśwież odczyty</button>
       </div>
 
       {monitoringData?.alerts && monitoringData.alerts.length > 0 && (
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '25px' }}>
           {monitoringData.alerts.map((al, idx) => (
-            <div key={idx} className="alert-box">⚠️ {al}</div>
+            <div key={idx} style={{ backgroundColor: '#f8d7da', borderLeft: '6px solid #dc3545', color: '#721c24', padding: '15px 20px', marginBottom: '10px', borderRadius: '4px', fontWeight: 'bold', whiteSpace: 'pre-wrap', textAlign: 'left', fontSize: '15px' }}>
+              ⚠️ {al}
+            </div>
           ))}
         </div>
       )}
 
-      <div className="dashboard-grid">
-        {/* Czujniki zbiorników */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+        {/* Czujniki paliwa */}
         {monitoringData?.fuels.map(f => (
-          <div key={f.id} className="dashboard-card">
-            <h4>Zbiornik {f.type}</h4>
-            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{f.tankLevel} L <small style={{fontSize:'14px', fontWeight:'normal'}}>z {f.maxLevel} L</small></div>
-            <div className="progress-bar-bg">
-              <div className="progress-bar-fill" style={{ width: `${f.percentage}%`, backgroundColor: Number(f.percentage) < 20 ? '#dc3545' : '#28a745' }}></div>
+          <div key={f.id} style={{ border: '1px solid #ced4da', borderRadius: '10px', padding: '20px', backgroundColor: '#f8f9fa', textAlign: 'left' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#495057', fontSize: '18px' }}>Zbiornik {f.type}</h4>
+            <div style={{ fontSize: '26px', fontWeight: 'bold', color: '#212529' }}>
+              {f.tankLevel} L <span style={{fontSize:'14px', fontWeight:'normal', color: '#6c757d'}}>z {f.maxLevel} L</span>
+            </div>
+            <div style={{ backgroundColor: '#e9ecef', borderRadius: '10px', height: '24px', width: '100%', overflow: 'hidden', marginTop: '15px' }}>
+              <div style={{ height: '100%', transition: 'width 0.5s ease-in-out', width: `${f.percentage}%`, backgroundColor: Number(f.percentage) < 20 ? '#dc3545' : '#28a745' }}></div>
             </div>
           </div>
         ))}
 
-        {/* Stacja LPG */}
+        {/* Instalacja LPG */}
         {monitoringData?.lpg && (
-          <div className="dashboard-card" style={{ borderColor: '#17a2b8' }}>
-            <h4 style={{ color: '#17a2b8' }}>Instalacja LPG</h4>
-            <div className="mt-10"><strong>Ciśnienie:</strong> {monitoringData.lpg.pressure} bar</div>
-            <div className="mt-10"><strong>Temperatura:</strong> {monitoringData.lpg.temp} °C</div>
+          <div style={{ border: '2px solid #17a2b8', borderRadius: '10px', padding: '20px', backgroundColor: '#f8f9fa', textAlign: 'left' }}>
+            <h4 style={{ color: '#17a2b8', margin: '0 0 15px 0', fontSize: '18px' }}>Instalacja LPG</h4>
+            <div style={{ fontSize: '16px', marginBottom: '8px', color: '#212529' }}><strong>Ciśnienie:</strong> {monitoringData.lpg.pressure} bar</div>
+            <div style={{ fontSize: '16px', color: '#212529' }}><strong>Temperatura:</strong> {monitoringData.lpg.temp} °C</div>
           </div>
         )}
 
-        {/* Kamery myjni */}
-        <div className="dashboard-card" style={{ borderColor: '#ffc107' }}>
-          <h4 style={{ color: '#ffc107' }}>Kamery Myjni (CCTV)</h4>
-          <ul className="list-unstyled mt-10">
+        {/* Kamery CCTV */}
+        <div style={{ border: '2px solid #ffc107', borderRadius: '10px', padding: '20px', backgroundColor: '#f8f9fa', textAlign: 'left' }}>
+          <h4 style={{ color: '#d39e00', margin: '0 0 15px 0', fontSize: '18px' }}>Kamery Myjni (CCTV)</h4>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {monitoringData?.carWash.map(bay => (
-              <li key={bay.bay} style={{ marginBottom: '10px' }}>
-                Stanowisko {bay.bay}: 
-                <span className="text-bold" style={{ color: bay.occupied ? 'red' : 'green', marginLeft: '5px' }}>{bay.occupied ? 'Zajęte' : 'Wolne'}</span>
-                <span style={{ marginLeft: '10px', fontSize: '12px' }}>[Kamera: {bay.camera}]</span>
+              <li key={bay.bay} style={{ marginBottom: '15px', borderBottom: '1px solid #dee2e6', paddingBottom: '10px' }}>
+                <span style={{ fontSize: '16px', color: '#495057' }}>Stanowisko {bay.bay}:</span>
+                <span style={{ color: bay.occupied ? '#dc3545' : '#28a745', fontWeight: 'bold', marginLeft: '10px', fontSize: '16px' }}>
+                  {bay.occupied ? '🔴 Zajęte' : '🟢 Wolne'}
+                </span>
+                <div style={{ fontSize: '13px', color: '#6c757d', marginTop: '5px' }}>📹 Status: {bay.camera}</div>
               </li>
             ))}
           </ul>
@@ -202,7 +187,14 @@ function App() {
     </div>
   );
 
-  // Kalkulacje Kasy
+  const handleDateChange = (val: string) => {
+    let fullDate = val;
+    if (val.length === 7) fullDate = `${val}-01`;
+    if (val.length === 4) fullDate = `${val}-01-01`;
+    setReportDateStr(fullDate);
+    fetchReports(reportPeriod, fullDate);
+  };
+
   const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
   const costPLN = selectedFuel ? (selectedFuel.pricePerLiter * posData.quantity).toFixed(2) : '0.00';
   const pointsCostPerLiter = selectedFuel?.type === 'LPG' ? 50 : 100;
@@ -218,11 +210,83 @@ function App() {
         <h2>Witaj, {loggedInUser}! (Panel Właściciela) 💼</h2>
         
         <div className="tabs-container">
-          <button onClick={() => setActiveTab('paliwa')} className={`tab-btn-large ${activeTab === 'paliwa' ? 'tab-active-paliwa' : 'tab-inactive'}`}>⛽ Paliwa i Dostawy</button>
+          <button onClick={() => setActiveTab('paliwa')} className={`tab-btn-large ${activeTab === 'paliwa' ? 'tab-active-paliwa' : 'tab-inactive'}`}>⛽ Paliwa</button>
           <button onClick={() => setActiveTab('pracownicy')} className={`tab-btn-large ${activeTab === 'pracownicy' ? 'tab-active-pracownicy' : 'tab-inactive'}`}>👨‍🔧 Pracownicy</button>
           <button onClick={() => setActiveTab('klienci')} className={`tab-btn-large ${activeTab === 'klienci' ? 'tab-active-klienci' : 'tab-inactive'}`}>👥 Klienci</button>
           <button onClick={() => { setActiveTab('monitoring'); fetchMonitoring(); }} className={`tab-btn-large ${activeTab === 'monitoring' ? 'tab-active-paliwa' : 'tab-inactive'}`}>📡 Monitoring</button>
+          <button onClick={() => { setActiveTab('raporty'); fetchReports(); }} className={`tab-btn-large ${activeTab === 'raporty' ? 'tab-active-pracownicy' : 'tab-inactive'}`}>📊 Raporty</button>
         </div>
+
+        {activeTab === 'raporty' && (
+          <div className="card card-light">
+            <div className="flex-space-between mb-20" style={{ alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Raporty Sprzedaży 📊</h3>
+              
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <label className="text-bold">Okres:</label>
+                <select 
+                  className="select-field input-small w-auto" 
+                  value={reportPeriod} 
+                  onChange={e => {
+                    const p = e.target.value as ReportPeriodType;
+                    setReportPeriod(p);
+                    fetchReports(p, reportDateStr);
+                  }}
+                >
+                  <option value="all">Cały czas</option>
+                  <option value="daily">Dzienny</option>
+                  <option value="monthly">Miesięczny</option>
+                  <option value="yearly">Roczny</option>
+                </select>
+
+                {reportPeriod === 'daily' && <input type="date" className="input-field input-small w-auto" value={reportDateStr.substring(0, 10)} onChange={e => handleDateChange(e.target.value)} />}
+                {reportPeriod === 'monthly' && <input type="month" className="input-field input-small w-auto" value={reportDateStr.substring(0, 7)} onChange={e => handleDateChange(e.target.value)} />}
+                {reportPeriod === 'yearly' && <input type="number" min="2020" max="2100" className="input-field input-small w-auto" value={reportDateStr.substring(0, 4)} onChange={e => handleDateChange(e.target.value)} />}
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+              <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
+                <h4 style={{ margin: 0, color: '#6c757d' }}>Utarg ({reportPeriod === 'all' ? 'Ogółem' : 'Wybrany Okres'})</h4>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#28a745' }}>{reportData?.totalRevenue.toFixed(2)} zł</div>
+              </div>
+              <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
+                <h4 style={{ margin: 0, color: '#6c757d' }}>Liczba Transakcji</h4>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#212529' }}>{reportData?.totalCount}</div>
+              </div>
+              <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
+                <h4 style={{ margin: 0, color: '#6c757d' }}>Średnia Transakcja</h4>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#17a2b8' }}>{((reportData?.totalRevenue || 0) / (reportData?.totalCount || 1)).toFixed(2)} zł</div>
+              </div>
+            </div>
+
+            <div className="card card-gray">
+              <h3 className="text-left">Historia Transakcji {reportPeriod === 'all' && '(15 najnowszych)'}</h3>
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead><tr><th>Data</th><th>Klient</th><th>Kwota</th><th>Płatność</th><th>Kasjer</th></tr></thead>
+                  <tbody>
+                    {reportData?.transactions.map(t => (
+                      <tr key={t.id}>
+                        <td>{new Date(t.date).toLocaleString()}</td>
+                        <td>{t.customer ? `${t.customer.firstName} ${t.customer.lastName}` : <span style={{color: '#888'}}>Niezarejestrowany</span>}</td>
+                        <td className="text-bold">{t.totalAmount.toFixed(2)} zł</td>
+                        <td>{t.paymentMethod}</td>
+                        <td>{t.employee.firstName}</td>
+                      </tr>
+                    ))}
+                    {reportData?.transactions.length === 0 && (
+                      <tr><td colSpan={5} className="text-center">Brak transakcji w wybranym okresie.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* WIDOK MONITORINGU */}
+        {activeTab === 'monitoring' && renderMonitoringTab()}
 
         {activeTab === 'paliwa' && (
           <>
@@ -324,8 +388,6 @@ function App() {
             </table>
           </div>
         )}
-
-        {activeTab === 'monitoring' && renderMonitoringTab()}
 
         {renderMessage()}
         <button onClick={logout} className="btn btn-danger mt-30">Wyloguj się</button>
