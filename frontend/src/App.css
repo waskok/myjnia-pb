@@ -190,6 +190,8 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 4px;
   font-weight: bold;
   animation: pulse 2s infinite;
+  /* TA LINIJKA URUCHAMIA CZYTANIE ZNAKÓW \n */
+  white-space: pre-wrap;
 }
 
 @keyframes pulse {

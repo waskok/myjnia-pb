@@ -352,7 +352,7 @@ app.get('/api/monitoring', async (req, res) => {
     const fuelStatus = fuels.map(f => {
       const percentage = (f.tankLevel / f.maxLevel) * 100;
       if (percentage < 20) { // Alarm gdy poniżej 20%
-        alerts.push(`[SMS WYSŁANO] Krytycznie niski poziom paliwa ${f.type} (${percentage.toFixed(1)}%). Zleć dostawę!`);
+        alerts.push(`Krytycznie niski poziom paliwa ${f.type} (${percentage.toFixed(1)}%). Zleć dostawę!\n[Wysłano powiadomienie SMS i E-mail]`);
       }
       return { ...f, percentage: percentage.toFixed(1) };
     });
@@ -361,7 +361,7 @@ app.get('/api/monitoring', async (req, res) => {
     const lpgPressure = (Math.random() * (15 - 9) + 9).toFixed(2); // Od 9 do 15 bar
     const lpgTemp = (Math.random() * (20 - 5) + 5).toFixed(1); // Od 5 do 20 stopni
     if (Number(lpgPressure) > 14) {
-      alerts.push(`[ALARM - E-MAIL] Zbyt wysokie ciśnienie zbiornika LPG: ${lpgPressure} bar!`);
+      alerts.push(`Zbyt wysokie ciśnienie zbiornika LPG: ${lpgPressure} bar!\n[Wysłano powiadomienie SMS i E-mail]`);
     }
 
     // 3. Symulacja kamer myjni (2 stanowiska)
@@ -372,7 +372,7 @@ app.get('/api/monitoring', async (req, res) => {
     
     carWashStatus.forEach(bay => {
         if (bay.camera !== 'Działa') {
-            alerts.push(`[OSTRZEŻENIE] Przerwa w transmisji wideo! Sprawdź kamerę na stanowisku nr ${bay.bay}.`);
+            alerts.push(` Przerwa w transmisji wideo! Sprawdź kamerę na stanowisku nr ${bay.bay}.\n[Wysłano powiadomienie SMS i E-mail]`);
         }
     });
 
