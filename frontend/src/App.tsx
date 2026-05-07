@@ -6,37 +6,45 @@ interface Employee { id: number; firstName: string; lastName: string; role: stri
 interface Customer { id: number; firstName: string; lastName: string; email: string; phone: string; loyaltyPoints: number; registered: boolean; }
 interface WashService { id: number; type: string; price: number; loyaltyPoints: number; }
 interface Reservation { id: number; date: string; status: string; washService: WashService; customer?: { firstName: string; lastName: string; phone: string; }; }
-interface Fuel { id: number; type: string; pricePerLiter: number; tankLevel: number; maxLevel: number; }
+interface Fuel { id: number; type: string; pricePerLiter: number; tankLevel: number; maxLevel: number; percentage?: string; }
 interface Delivery { id: number; fuel: Fuel; quantity: number; status: string; deliveryDate: string; supplier: string; owner?: { firstName: string; lastName: string; } }
+interface MonitoringData { fuels: Fuel[]; lpg: { pressure: string; temp: string; }; carWash: { bay: number; occupied: boolean; camera: string; }[]; alerts: string[]; }
 
 function App() {
   const [message, setMessage] = useState('');
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
-  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci'>('paliwa');
+  
+  // ZAKŁADKI WŁAŚCICIELA I PRACOWNIKA (Tutaj dodano 'monitoring')
+  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring'>('paliwa');
+  const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring'>('pos');
 
-  const [loginMode, setLoginMode] = useState<'customer' | 'staff'>('customer');
+  // --- STANY KLIENTA ---
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', address: '', phone: '', email: '', password: '' });
-  const [staffData, setStaffData] = useState({ login: '', password: '' });
-
   const [services, setServices] = useState<WashService[]>([]);
   const [selectedService, setSelectedService] = useState('');
   const [reservationDate, setReservationDate] = useState('');
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
 
+  // --- STANY SŁUŻBOWE ---
+  const [loginMode, setLoginMode] = useState<'customer' | 'staff'>('customer');
+  const [staffData, setStaffData] = useState({ login: '', password: '' });
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [fuels, setFuels] = useState<Fuel[]>([]);
+  
   const [posData, setPosData] = useState({ fuelId: '', quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false });
   const [posCustomerQuery, setPosCustomerQuery] = useState('');
   const [posVerifiedCustomer, setPosVerifiedCustomer] = useState<Customer | null>(null);
 
+  // --- STANY WŁAŚCICIELA I MONITORINGU ---
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [newDelivery, setNewDelivery] = useState({ fuelId: '', quantity: 1000, supplier: '', deliveryDate: '' });
   const [newPrice, setNewPrice] = useState<{ [key: number]: number }>({});
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [newEmployee, setNewEmployee] = useState({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' });
+  const [monitoringData, setMonitoringData] = useState<MonitoringData | null>(null);
 
   // --- HANDLERY ZMIAN ---
   const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -50,12 +58,22 @@ function App() {
 
   // --- POBIERANIE DANYCH ---
   const fetchServices = async () => { try { const res = await fetch('http://localhost:5000/api/services'); const data = await res.json(); setServices(data); if (data.length > 0) setSelectedService(String(data[0].id)); } catch (e) { console.error(e); } };
-  const fetchFuels = async () => { try { const res = await fetch('http://localhost:5000/api/fuels'); const data = await res.json(); setFuels(data); if (data.length > 0) { setPosData(p => ({ ...p, fuelId: String(data[0].id) })); setNewDelivery(p => ({ ...p, fuelId: String(data[0].id) })); } } catch (e) { console.error(e); } };
+  const fetchFuels = async () => { try { const res = await fetch('http://localhost:5000/api/fuels'); const data = await res.json(); setFuels(data); if (data.length > 0) { setPosData(prev => ({ ...prev, fuelId: String(data[0].id) })); setNewDelivery(prev => ({ ...prev, fuelId: String(data[0].id) })); } } catch (e) { console.error(e); } };
   const fetchMyReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/my-reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setMyReservations(await res.json()); } catch (e) { console.error(e); } };
   const fetchAllReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/employee/reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setAllReservations(await res.json()); } catch (e) { console.error(e); } };
   const fetchDeliveries = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/deliveries', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setDeliveries(await res.json()); } catch (e) { console.error(e); } };
   const fetchEmployees = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/employees', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setEmployees(await res.json()); } catch (e) { console.error(e); } };
   const fetchCustomers = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/customers', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setCustomers(await res.json()); } catch (e) { console.error(e); } };
+  
+  // POBIERANIE MONITORINGU
+  const fetchMonitoring = async () => { 
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try { 
+      const res = await fetch('http://localhost:5000/api/monitoring', { headers: { 'Authorization': `Bearer ${token}` } }); 
+      if (res.ok) setMonitoringData(await res.json()); 
+    } catch (e) { console.error(e); } 
+  };
 
   // --- LOGOWANIE ---
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -75,15 +93,21 @@ function App() {
           setLoggedInUser(data.user.firstName);
           setUserRole(data.user.role || 'customer');
           
-          if (data.user.role === 'owner') { fetchFuels(); fetchDeliveries(data.token); fetchEmployees(data.token); fetchCustomers(data.token); }
-          else if (data.user.role === 'employee') { fetchFuels(); fetchAllReservations(data.token); }
+          if (data.user.role === 'owner') { 
+            setActiveTab('paliwa');
+            fetchFuels(); fetchDeliveries(data.token); fetchEmployees(data.token); fetchCustomers(data.token);
+          }
+          else if (data.user.role === 'employee') { 
+            setActiveEmpTab('pos');
+            fetchFuels(); fetchAllReservations(data.token); 
+          }
           else { fetchServices(); fetchMyReservations(data.token); }
         } else { setIsLogin(true); setFormData({ ...formData, password: '' }); }
       } else setMessage('❌ ' + data.error);
-    } catch (e) { console.error(e); setMessage('❌ Błąd serwera!'); }
+    } catch (e) { console.error(e); setMessage('❌ Błąd połączenia z serwerem!'); }
   };
 
-  // --- KASA (POS) ---
+  // --- AKCJE KASY I INNE ---
   const handleVerifyCustomer = async () => {
     if (!posCustomerQuery) return;
     try {
@@ -112,21 +136,73 @@ function App() {
     } catch (e) { console.error(e); } 
   };
 
-  // --- INNE AKCJE ---
   const handleReservation = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate }) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setReservationDate(''); fetchMyReservations(token); } } catch (e) { console.error(e); } };
   const handleCompleteReservation = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Zakończono!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };
   const handleOrderDelivery = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/owner/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(newDelivery) }); if (res.ok) { setMessage('✅ Zlecono!'); fetchDeliveries(token); setNewDelivery({...newDelivery, deliveryDate: '', supplier: ''}); } } catch (e) { console.error(e); } };
   const handleCompleteDelivery = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/deliveries/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Odebrano!'); fetchDeliveries(token); fetchFuels(); } } catch (e) { console.error(e); } };
   const handleUpdatePrice = async (id: number) => { if (!newPrice[id]) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/fuels/${id}/price`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ price: newPrice[id] }) }); if (res.ok) { setMessage('✅ Zmieniono!'); fetchFuels(); setNewPrice({ ...newPrice, [id]: 0 }); } } catch (e) { console.error(e); } };
 
-  // --- ZARZĄDZANIE ---
   const handleAddEmployee = async (e: React.FormEvent) => { e.preventDefault(); const token = localStorage.getItem('token'); try { const res = await fetch('http://localhost:5000/api/owner/employees', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(newEmployee) }); if (res.ok) { setMessage('✅ Dodano!'); setNewEmployee({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' }); if(token) fetchEmployees(token); } else { const err = await res.json(); setMessage('❌ ' + err.error); } } catch (e) { console.error(e); } };
   const handleDeleteEmployee = async (id: number) => { if (!window.confirm('Usunąć?')) return; const token = localStorage.getItem('token'); try { const res = await fetch(`http://localhost:5000/api/owner/employees/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { if(token) fetchEmployees(token); setMessage('✅ Usunięto.'); } } catch (e) { console.error(e); } };
 
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
   const renderMessage = () => message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>;
 
-  // --- KALKULACJE ---
+  // --- RENDEROWANIE ZAKŁADKI MONITORINGU ---
+  const renderMonitoringTab = () => (
+    <div className="card card-light" style={{ borderColor: '#6c757d' }}>
+      <div className="flex-space-between mb-20">
+        <h3 style={{ margin: 0 }}>Centrum Monitoringu PB 📡</h3>
+        <button onClick={fetchMonitoring} className="btn btn-dark">Odśwież odczyty</button>
+      </div>
+
+      {monitoringData?.alerts && monitoringData.alerts.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          {monitoringData.alerts.map((al, idx) => (
+            <div key={idx} className="alert-box">⚠️ {al}</div>
+          ))}
+        </div>
+      )}
+
+      <div className="dashboard-grid">
+        {/* Czujniki zbiorników */}
+        {monitoringData?.fuels.map(f => (
+          <div key={f.id} className="dashboard-card">
+            <h4>Zbiornik {f.type}</h4>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{f.tankLevel} L <small style={{fontSize:'14px', fontWeight:'normal'}}>z {f.maxLevel} L</small></div>
+            <div className="progress-bar-bg">
+              <div className="progress-bar-fill" style={{ width: `${f.percentage}%`, backgroundColor: Number(f.percentage) < 20 ? '#dc3545' : '#28a745' }}></div>
+            </div>
+          </div>
+        ))}
+
+        {/* Stacja LPG */}
+        {monitoringData?.lpg && (
+          <div className="dashboard-card" style={{ borderColor: '#17a2b8' }}>
+            <h4 style={{ color: '#17a2b8' }}>Instalacja LPG</h4>
+            <div className="mt-10"><strong>Ciśnienie:</strong> {monitoringData.lpg.pressure} bar</div>
+            <div className="mt-10"><strong>Temperatura:</strong> {monitoringData.lpg.temp} °C</div>
+          </div>
+        )}
+
+        {/* Kamery myjni */}
+        <div className="dashboard-card" style={{ borderColor: '#ffc107' }}>
+          <h4 style={{ color: '#ffc107' }}>Kamery Myjni (CCTV)</h4>
+          <ul className="list-unstyled mt-10">
+            {monitoringData?.carWash.map(bay => (
+              <li key={bay.bay} style={{ marginBottom: '10px' }}>
+                Stanowisko {bay.bay}: 
+                <span className="text-bold" style={{ color: bay.occupied ? 'red' : 'green', marginLeft: '5px' }}>{bay.occupied ? 'Zajęte' : 'Wolne'}</span>
+                <span style={{ marginLeft: '10px', fontSize: '12px' }}>[Kamera: {bay.camera}]</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Kalkulacje Kasy
   const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
   const costPLN = selectedFuel ? (selectedFuel.pricePerLiter * posData.quantity).toFixed(2) : '0.00';
   const pointsCostPerLiter = selectedFuel?.type === 'LPG' ? 50 : 100;
@@ -144,7 +220,8 @@ function App() {
         <div className="tabs-container">
           <button onClick={() => setActiveTab('paliwa')} className={`tab-btn-large ${activeTab === 'paliwa' ? 'tab-active-paliwa' : 'tab-inactive'}`}>⛽ Paliwa i Dostawy</button>
           <button onClick={() => setActiveTab('pracownicy')} className={`tab-btn-large ${activeTab === 'pracownicy' ? 'tab-active-pracownicy' : 'tab-inactive'}`}>👨‍🔧 Pracownicy</button>
-          <button onClick={() => setActiveTab('klienci')} className={`tab-btn-large ${activeTab === 'klienci' ? 'tab-active-klienci' : 'tab-inactive'}`}>👥 Baza Klientów</button>
+          <button onClick={() => setActiveTab('klienci')} className={`tab-btn-large ${activeTab === 'klienci' ? 'tab-active-klienci' : 'tab-inactive'}`}>👥 Klienci</button>
+          <button onClick={() => { setActiveTab('monitoring'); fetchMonitoring(); }} className={`tab-btn-large ${activeTab === 'monitoring' ? 'tab-active-paliwa' : 'tab-inactive'}`}>📡 Monitoring</button>
         </div>
 
         {activeTab === 'paliwa' && (
@@ -182,7 +259,7 @@ function App() {
                 <button type="submit" className="btn btn-warning">Zleć dostawę</button>
               </form>
               
-              <ul className="list-unstyled">
+              <ul className="list-unstyled mt-20">
                 {deliveries.map(d => (
                   <li key={d.id} className="list-item flex-space-between">
                     <div>
@@ -247,6 +324,9 @@ function App() {
             </table>
           </div>
         )}
+
+        {activeTab === 'monitoring' && renderMonitoringTab()}
+
         {renderMessage()}
         <button onClick={logout} className="btn btn-danger mt-30">Wyloguj się</button>
       </div>
@@ -260,65 +340,79 @@ function App() {
     return (
       <div className="app-container">
         <h2>Witaj, {loggedInUser}! (Panel Pracownika) 👨‍🔧</h2>
-        <div className="card card-info">
-          <h3>Kasa Fiskalna (Sprzedaż Paliwa) ⛽</h3>
-          
-          <div className="flex-row text-left flex-end mb-15">
-             <div className="flex-1">
-               <label>1. Skanuj klienta (E-mail lub Telefon):</label>
-               <input type="text" className="input-field" value={posCustomerQuery} onChange={e => setPosCustomerQuery(e.target.value)} placeholder="Wpisz dane i kliknij Sprawdź..." />
-             </div>
-             <button type="button" onClick={handleVerifyCustomer} className="btn btn-dark">Sprawdź</button>
-             <button type="button" onClick={() => { setPosVerifiedCustomer(null); setPosCustomerQuery(''); setPosData({...posData, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false}); }} className="btn btn-light">Pomiń</button>
-          </div>
 
-          {posVerifiedCustomer && (
-             <div className="verification-box">
-                <strong>Zweryfikowano:</strong> {posVerifiedCustomer.firstName} | <strong>Dostępne punkty:</strong> {posVerifiedCustomer.loyaltyPoints} pkt
-             </div>
-          )}
+        <div className="tabs-container">
+          <button onClick={() => setActiveEmpTab('pos')} className={`tab-btn-large ${activeEmpTab === 'pos' ? 'tab-active-pracownicy' : 'tab-inactive'}`}>⛽ Kasa POS</button>
+          <button onClick={() => setActiveEmpTab('rezerwacje')} className={`tab-btn-large ${activeEmpTab === 'rezerwacje' ? 'tab-active-pracownicy' : 'tab-inactive'}`}>🧼 Rezerwacje</button>
+          <button onClick={() => { setActiveEmpTab('monitoring'); fetchMonitoring(); }} className={`tab-btn-large ${activeEmpTab === 'monitoring' ? 'tab-active-paliwa' : 'tab-inactive'}`}>📡 Monitoring</button>
+        </div>
 
-          <form onSubmit={handlePOSSubmit} className="flex-col">
-            <div className="flex-row text-left">
-              <div className="flex-1"><label>2. Wybierz paliwo:</label><select name="fuelId" className="select-field" value={posData.fuelId} onChange={handlePosChange}>{fuels.map(f => <option key={f.id} value={f.id}>{f.type} - {f.pricePerLiter} zł/l (Dostępne: {f.tankLevel} l)</option>)}</select></div>
-              <div className="flex-1"><label>Ilość (L):</label><input type="number" name="quantity" className="input-field" min="1" step="0.01" value={posData.quantity} onChange={handlePosChange} required /></div>
-            </div>
+        {activeEmpTab === 'pos' && (
+          <div className="card card-info">
+            <h3>Kasa Fiskalna (Sprzedaż Paliwa)</h3>
             
-            <div className="payment-summary">
-              <strong>Do zapłaty:</strong> {costPLN} zł {posVerifiedCustomer && (<span> albo <strong>{costPoints} pkt</strong></span>)}
+            <div className="flex-row text-left flex-end mb-15">
+               <div className="flex-1">
+                 <label>1. Skanuj klienta (E-mail lub Telefon):</label>
+                 <input type="text" className="input-field" value={posCustomerQuery} onChange={e => setPosCustomerQuery(e.target.value)} placeholder="Wpisz dane i kliknij Sprawdź..." />
+               </div>
+               <button type="button" onClick={handleVerifyCustomer} className="btn btn-dark">Sprawdź</button>
+               <button type="button" onClick={() => { setPosVerifiedCustomer(null); setPosCustomerQuery(''); setPosData({...posData, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false}); }} className="btn btn-light">Pomiń</button>
             </div>
 
-            <div className="flex-row text-left">
-              <div className="flex-1">
-                <label>3. Płatność:</label>
-                <select name="paymentMethod" className="select-field" value={posData.paymentMethod} onChange={handlePosChange}>
-                  <option value="Karta">Karta</option><option value="Gotówka">Gotówka</option>
-                  {posVerifiedCustomer && <option value="Punkty" disabled={!canAffordWithPoints}>Punkty Lojalnościowe {canAffordWithPoints ? '' : '(Zbyt mało)'}</option>}
-                </select>
+            {posVerifiedCustomer && (
+               <div className="verification-box">
+                  <strong>Zweryfikowano:</strong> {posVerifiedCustomer.firstName} | <strong>Dostępne punkty:</strong> {posVerifiedCustomer.loyaltyPoints} pkt
+               </div>
+            )}
+
+            <form onSubmit={handlePOSSubmit} className="flex-col">
+              <div className="flex-row text-left">
+                <div className="flex-1"><label>2. Wybierz paliwo:</label><select name="fuelId" className="select-field" value={posData.fuelId} onChange={handlePosChange}>{fuels.map(f => <option key={f.id} value={f.id}>{f.type} - {f.pricePerLiter} zł/l (Dostępne: {f.tankLevel} l)</option>)}</select></div>
+                <div className="flex-1"><label>Ilość (L):</label><input type="number" name="quantity" className="input-field" min="1" step="0.01" value={posData.quantity} onChange={handlePosChange} required /></div>
               </div>
-            </div>
+              
+              <div className="payment-summary">
+                <strong>Do zapłaty:</strong> {costPLN} zł {posVerifiedCustomer && (<span> albo <strong>{costPoints} pkt</strong></span>)}
+              </div>
 
-            <div className="flex-row text-left flex-start">
-              <input type="checkbox" name="issueInvoice" id="issueInvoice" className="checkbox-large" checked={posData.issueInvoice} onChange={handlePosChange} />
-              <label htmlFor="issueInvoice" className="text-bold">Wystaw Fakturę VAT</label>
-            </div>
-            <button type="submit" className="btn btn-info mt-10">Zatwierdź sprzedaż</button>
-          </form>
-        </div>
+              <div className="flex-row text-left">
+                <div className="flex-1">
+                  <label>3. Płatność:</label>
+                  <select name="paymentMethod" className="select-field" value={posData.paymentMethod} onChange={handlePosChange}>
+                    <option value="Karta">Karta</option><option value="Gotówka">Gotówka</option>
+                    {posVerifiedCustomer && <option value="Punkty" disabled={!canAffordWithPoints}>Punkty Lojalnościowe {canAffordWithPoints ? '' : '(Zbyt mało)'}</option>}
+                  </select>
+                </div>
+              </div>
 
-        <div className="card card-gray">
-          <h3>Rezerwacje myjni do obsłużenia</h3>
-          {allReservations.length === 0 ? <p>Brak rezerwacji.</p> : (
-            <ul className="list-unstyled">
-              {allReservations.map((res) => (
-                <li key={res.id} className="list-item flex-space-between">
-                  <div><strong>{new Date(res.date).toLocaleString()}</strong> <br/> Usługa: {res.washService.type} <br/> Status: <b>{res.status}</b></div>
-                  {res.status === 'Oczekująca' && <button onClick={() => handleCompleteReservation(res.id)} className="btn btn-primary">Zakończ</button>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+              <div className="flex-row text-left flex-start">
+                <input type="checkbox" name="issueInvoice" id="issueInvoice" className="checkbox-large" checked={posData.issueInvoice} onChange={handlePosChange} />
+                <label htmlFor="issueInvoice" className="text-bold">Wystaw Fakturę VAT</label>
+              </div>
+              <button type="submit" className="btn btn-info mt-10">Zatwierdź sprzedaż</button>
+            </form>
+          </div>
+        )}
+
+        {activeEmpTab === 'rezerwacje' && (
+          <div className="card card-gray">
+            <h3>Rezerwacje myjni do obsłużenia</h3>
+            {allReservations.length === 0 ? <p>Brak rezerwacji.</p> : (
+              <ul className="list-unstyled">
+                {allReservations.map((res) => (
+                  <li key={res.id} className="list-item flex-space-between">
+                    <div><strong>{new Date(res.date).toLocaleString()}</strong> <br/> Usługa: {res.washService.type} <br/> Status: <b>{res.status}</b></div>
+                    {res.status === 'Oczekująca' && <button onClick={() => handleCompleteReservation(res.id)} className="btn btn-primary">Zakończ</button>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {activeEmpTab === 'monitoring' && renderMonitoringTab()}
+
         {renderMessage()}
         <button onClick={logout} className="btn btn-danger mt-30">Wyloguj się</button>
       </div>
