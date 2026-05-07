@@ -453,6 +453,47 @@ app.get('/api/owner/customers', async (req, res) => {
   }
 });
 
+// --- GENEROWANIE RAPORTÓW ---
+
+app.get('/api/owner/reports', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    // 1. Obliczanie całkowitego utargu
+    const revenueStats = await prisma.transaction.aggregate({
+      _sum: { totalAmount: true }
+    });
+
+    // 2. Liczba wszystkich transakcji
+    const transactionCount = await prisma.transaction.count();
+
+    // 3. Pobranie 15 ostatnich transakcji z detalami
+    const recentTransactions = await prisma.transaction.findMany({
+      take: 15,
+      orderBy: { date: 'desc' },
+      include: {
+        items: true,
+        customer: { select: { firstName: true, lastName: true } },
+        employee: { select: { firstName: true, lastName: true } }
+      }
+    });
+
+    res.json({
+      totalRevenue: revenueStats._sum.totalAmount || 0,
+      totalCount: transactionCount,
+      transactions: recentTransactions
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd generowania raportów.' });
+  }
+});
+
 app.get('/api/owner/deliveries', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
