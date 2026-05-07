@@ -375,8 +375,97 @@ app.patch('/api/employee/reservations/:id/complete', async (req, res) => {
 });
 
 // ==========================================
-// MODUŁ WŁAŚCICIELA (SZEFA)
+// MODUŁ WŁAŚCICIELA 
 // ==========================================
+// --- ZARZĄDZANIE PRACOWNIKAMI ---
+
+// 1. Pobieranie listy pracowników
+app.get('/api/owner/employees', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const employees = await prisma.employee.findMany({
+      where: { ownerId: decoded.id },
+      select: { id: true, firstName: true, lastName: true, role: true, login: true, email: true, phone: true }
+    });
+    res.json(employees);
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania pracowników.' });
+  }
+});
+
+// 2. Dodawanie nowego pracownika
+app.post('/api/owner/employees', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const { firstName, lastName, role, login, password, email, phone } = req.body;
+    
+    // Sprawdzamy czy login jest wolny
+    const existing = await prisma.employee.findUnique({ where: { login } });
+    if (existing) return res.status(400).json({ error: 'Login jest już zajęty!' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newEmployee = await prisma.employee.create({
+      data: {
+        firstName, lastName, role, login, email, phone,
+        password: hashedPassword,
+        ownerId: decoded.id
+      }
+    });
+
+    res.status(201).json({ message: 'Pracownik dodany pomyślnie!' });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd podczas dodawania pracownika.' });
+  }
+});
+
+// 3. Usuwanie pracownika
+app.delete('/api/owner/employees/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    await prisma.employee.delete({
+      where: { id: Number(req.params.id) }
+    });
+
+    res.json({ message: 'Pracownik został usunięty.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd podczas usuwania pracownika.' });
+  }
+});
+
+// --- PODGLĄD BAZY KLIENTÓW ---
+
+app.get('/api/owner/customers', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+
+    const customers = await prisma.customer.findMany({
+      select: { id: true, firstName: true, lastName: true, email: true, phone: true, loyaltyPoints: true, registered: true },
+      orderBy: { lastName: 'asc' }
+    });
+    res.json(customers);
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania bazy klientów.' });
+  }
+});
+
+
+
 app.get('/api/owner/deliveries', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;

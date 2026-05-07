@@ -2,15 +2,18 @@ import { useState } from 'react';
 import './App.css'; 
 
 // --- TYPY ---
+interface Employee { id: number; firstName: string; lastName: string; role: string; login: string; email?: string; phone?: string; }
+interface Customer { id: number; firstName: string; lastName: string; email: string; phone: string; loyaltyPoints: number; registered: boolean; }
 interface WashService { id: number; type: string; price: number; loyaltyPoints: number; }
 interface Reservation { id: number; date: string; status: string; washService: WashService; customer?: { firstName: string; lastName: string; phone: string; }; }
 interface Fuel { id: number; type: string; pricePerLiter: number; tankLevel: number; maxLevel: number; }
-interface Delivery { id: number; fuel: Fuel; quantity: number; status: string; deliveryDate: string; supplier: string; owner: { firstName: string; lastName: string; } }
+interface Delivery { id: number; fuel: Fuel; quantity: number; status: string; deliveryDate: string; supplier: string; owner?: { firstName: string; lastName: string; } }
 
 function App() {
   const [message, setMessage] = useState('');
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
+  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci'>('paliwa');
 
   // --- STANY KLIENTA ---
   const [isLogin, setIsLogin] = useState(true);
@@ -29,12 +32,15 @@ function App() {
   // Stan do obsługi kasy POS
   const [posData, setPosData] = useState({ fuelId: '', quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false });
   const [posCustomerQuery, setPosCustomerQuery] = useState('');
-  const [posVerifiedCustomer, setPosVerifiedCustomer] = useState<{ email: string, firstName: string, loyaltyPoints: number } | null>(null);
+  const [posVerifiedCustomer, setPosVerifiedCustomer] = useState<Customer | null>(null);
 
   // --- STANY WŁAŚCICIELA ---
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [newDelivery, setNewDelivery] = useState({ fuelId: '', quantity: 1000, supplier: '', deliveryDate: '' });
   const [newPrice, setNewPrice] = useState<{ [key: number]: number }>({});
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [newEmployee, setNewEmployee] = useState({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' });
 
   // --- HANDLERY ---
   const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -52,6 +58,10 @@ function App() {
   const fetchMyReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/my-reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setMyReservations(await res.json()); } catch (e) { console.error(e); } };
   const fetchAllReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/employee/reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setAllReservations(await res.json()); } catch (e) { console.error(e); } };
   const fetchDeliveries = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/deliveries', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setDeliveries(await res.json()); } catch (e) { console.error(e); } };
+  
+  // Nowe funkcje pobierające dla Właściciela
+  const fetchEmployees = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/employees', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setEmployees(await res.json()); } catch (e) { console.error(e); } };
+  const fetchCustomers = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/customers', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setCustomers(await res.json()); } catch (e) { console.error(e); } };
 
   // --- LOGOWANIE ---
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -71,7 +81,9 @@ function App() {
           setLoggedInUser(data.user.firstName);
           setUserRole(data.user.role || 'customer');
           
-          if (data.user.role === 'owner') { fetchFuels(); fetchDeliveries(data.token); }
+          if (data.user.role === 'owner') { 
+            fetchFuels(); fetchDeliveries(data.token); fetchEmployees(data.token); fetchCustomers(data.token);
+          }
           else if (data.user.role === 'employee') { fetchFuels(); fetchAllReservations(data.token); }
           else { fetchServices(); fetchMyReservations(data.token); }
         } else { setIsLogin(true); setFormData({ ...formData, password: '' }); }
@@ -121,6 +133,39 @@ function App() {
   const handleCompleteDelivery = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/deliveries/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Paliwo dolane!'); fetchDeliveries(token); fetchFuels(); } } catch (e) { console.error(e); } };
   const handleUpdatePrice = async (id: number) => { if (!newPrice[id]) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/fuels/${id}/price`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ price: newPrice[id] }) }); if (res.ok) { setMessage('✅ Cena zmieniona!'); fetchFuels(); setNewPrice({ ...newPrice, [id]: 0 }); } } catch (e) { console.error(e); } };
 
+  // --- AKCJE ZARZĄDZANIA WŁAŚCICIELA ---
+  const handleAddEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('http://localhost:5000/api/owner/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(newEmployee)
+      });
+      if (res.ok) {
+        setMessage('✅ Pracownik dodany!');
+        setNewEmployee({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' });
+        if(token) fetchEmployees(token);
+      } else {
+        const errorData = await res.json();
+        setMessage('❌ ' + errorData.error);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDeleteEmployee = async (id: number) => {
+    if (!window.confirm('Czy na pewno chcesz usunąć tego pracownika?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) { if(token) fetchEmployees(token); setMessage('✅ Pracownik usunięty.'); }
+    } catch (e) { console.error(e); }
+  };
+
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
   const renderMessage = () => message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>;
@@ -140,52 +185,144 @@ function App() {
       <div className="app-container">
         <h2>Witaj, {loggedInUser}! (Panel Właściciela) 💼</h2>
         
-        <div className="card card-danger">
-          <h3>Zarządzanie Cennikiem i Magazynem 📈</h3>
-          <div style={{ overflowX: 'auto' }}>
+        {/* DUŻE WIDOCZNE PRZYCISKI ZAKŁADEK */}
+        <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginBottom: '30px', flexWrap: 'wrap' }}>
+          <button 
+            onClick={() => setActiveTab('paliwa')} 
+            style={{ padding: '15px 25px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '8px', transition: 'all 0.2s',
+                     border: activeTab === 'paliwa' ? '2px solid #343a40' : '1px solid #ccc', 
+                     backgroundColor: activeTab === 'paliwa' ? '#343a40' : '#f8f9fa', 
+                     color: activeTab === 'paliwa' ? 'white' : 'black' }}
+          >
+            ⛽ Paliwa i Dostawy
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('pracownicy')} 
+            style={{ padding: '15px 25px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '8px', transition: 'all 0.2s',
+                     border: activeTab === 'pracownicy' ? '2px solid #17a2b8' : '1px solid #ccc', 
+                     backgroundColor: activeTab === 'pracownicy' ? '#17a2b8' : '#f8f9fa', 
+                     color: activeTab === 'pracownicy' ? 'white' : 'black' }}
+          >
+            👨‍🔧 Pracownicy
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('klienci')} 
+            style={{ padding: '15px 25px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '8px', transition: 'all 0.2s',
+                     border: activeTab === 'klienci' ? '2px solid #ffc107' : '1px solid #ccc', 
+                     backgroundColor: activeTab === 'klienci' ? '#ffc107' : '#f8f9fa', 
+                     color: activeTab === 'klienci' ? 'black' : 'black' }}
+          >
+            👥 Baza Klientów
+          </button>
+        </div>
+
+        {activeTab === 'paliwa' && (
+          <>
+            <div className="card card-danger">
+              <h3>Zarządzanie Cennikiem i Magazynem 📈</h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead><tr><th>Paliwo</th><th>Stan Zbiornika</th><th>Aktualna Cena</th><th>Nowa Cena</th><th>Akcja</th></tr></thead>
+                  <tbody>
+                    {fuels.map(f => (
+                      <tr key={f.id}>
+                        <td><strong>{f.type}</strong></td>
+                        <td style={{ color: f.tankLevel < 1000 ? 'red' : 'black', fontWeight: f.tankLevel < 1000 ? 'bold' : 'normal' }}>{f.tankLevel} / {f.maxLevel} L</td>
+                        <td>{f.pricePerLiter} zł/L</td>
+                        <td><input type="number" step="0.01" className="input-small" value={newPrice[f.id] || ''} onChange={(e) => setNewPrice({ ...newPrice, [f.id]: parseFloat(e.target.value) })} /></td>
+                        <td><button onClick={() => handleUpdatePrice(f.id)} className="btn btn-success">Zmień</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="card card-warning">
+              <h3>Zarządzanie Dostawami 🚚</h3>
+              <form onSubmit={handleOrderDelivery} className="flex-row">
+                <select name="fuelId" className="select-field input-small" value={newDelivery.fuelId} onChange={handleDeliveryChange} required>
+                  <option value="" disabled>Paliwo</option>
+                  {fuels.map(f => <option key={f.id} value={f.id}>{f.type}</option>)}
+                </select>
+                <input type="number" name="quantity" className="input-field input-small" placeholder="Ilość litrów" value={newDelivery.quantity} onChange={handleDeliveryChange} required />
+                <input type="text" name="supplier" className="input-field input-small" placeholder="Nazwa dostawcy" value={newDelivery.supplier} onChange={handleDeliveryChange} required />
+                <input type="datetime-local" name="deliveryDate" className="input-field" style={{width: 'auto'}} value={newDelivery.deliveryDate} onChange={handleDeliveryChange} required />
+                <button type="submit" className="btn btn-warning">Zleć dostawę</button>
+              </form>
+              
+              <ul className="list-unstyled">
+                {deliveries.map(d => (
+                  <li key={d.id} className="list-item flex-space-between">
+                    <div>
+                      <strong>{d.fuel.type}</strong> - {d.quantity} L (Dostawca: {d.supplier})<br/> 
+                      Planowana data: {new Date(d.deliveryDate).toLocaleString()} <br/>
+                      Status: <span className="text-bold" style={{ color: d.status === 'Dostarczona' ? 'green' : 'orange' }}>{d.status}</span>
+                    </div>
+                    {d.status !== 'Dostarczona' && <button onClick={() => handleCompleteDelivery(d.id)} className="btn btn-primary">Odbierz dostawę</button>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'pracownicy' && (
+          <>
+            <div className="card card-info">
+              <h3>Dodaj Pracownika</h3>
+              <form onSubmit={handleAddEmployee} className="flex-row">
+                <input placeholder="Imię" className="input-field input-small" required value={newEmployee.firstName} onChange={e => setNewEmployee({...newEmployee, firstName: e.target.value})} />
+                <input placeholder="Nazwisko" className="input-field input-small" required value={newEmployee.lastName} onChange={e => setNewEmployee({...newEmployee, lastName: e.target.value})} />
+                <input placeholder="Login" className="input-field input-small" required value={newEmployee.login} onChange={e => setNewEmployee({...newEmployee, login: e.target.value})} />
+                <input placeholder="Hasło" type="password" className="input-field input-small" required value={newEmployee.password} onChange={e => setNewEmployee({...newEmployee, password: e.target.value})} />
+                <select className="select-field input-small" value={newEmployee.role} onChange={e => setNewEmployee({...newEmployee, role: e.target.value})}>
+                  <option>Kasjer</option>
+                  <option>Monitoring</option>
+                  <option>Obsługa Myjni</option>
+                </select>
+                <button type="submit" className="btn btn-success">Dodaj</button>
+              </form>
+            </div>
+            
+            <div className="card card-gray">
+              <h3>Lista Pracowników</h3>
+              <table className="data-table">
+                <thead><tr><th>Imię i Nazwisko</th><th>Rola</th><th>Login</th><th>Akcja</th></tr></thead>
+                <tbody>
+                  {employees.map(emp => (
+                    <tr key={emp.id}>
+                      <td>{emp.firstName} {emp.lastName}</td>
+                      <td>{emp.role}</td>
+                      <td>{emp.login}</td>
+                      <td><button onClick={() => handleDeleteEmployee(emp.id)} className="btn btn-danger">Usuń</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'klienci' && (
+          <div className="card card-warning">
+            <h3>Baza Zarejestrowanych Klientów</h3>
             <table className="data-table">
-              <thead><tr><th>Paliwo</th><th>Stan Zbiornika</th><th>Aktualna Cena</th><th>Nowa Cena</th><th>Akcja</th></tr></thead>
+              <thead><tr><th>Klient</th><th>E-mail / Tel</th><th>Punkty</th></tr></thead>
               <tbody>
-                {fuels.map(f => (
-                  <tr key={f.id}>
-                    <td><strong>{f.type}</strong></td>
-                    <td style={{ color: f.tankLevel < 1000 ? 'red' : 'black', fontWeight: f.tankLevel < 1000 ? 'bold' : 'normal' }}>{f.tankLevel} / {f.maxLevel} L</td>
-                    <td>{f.pricePerLiter} zł/L</td>
-                    <td><input type="number" step="0.01" className="input-small" value={newPrice[f.id] || ''} onChange={(e) => setNewPrice({ ...newPrice, [f.id]: parseFloat(e.target.value) })} /></td>
-                    <td><button onClick={() => handleUpdatePrice(f.id)} className="btn btn-success">Zmień</button></td>
+                {customers.map(c => (
+                  <tr key={c.id}>
+                    <td>{c.firstName} {c.lastName}</td>
+                    <td>{c.email}<br/><small>{c.phone}</small></td>
+                    <td><strong style={{color: '#155724'}}>{c.loyaltyPoints} pkt</strong></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-
-        <div className="card card-warning">
-          <h3>Zarządzanie Dostawami 🚚</h3>
-          <form onSubmit={handleOrderDelivery} className="flex-row">
-            <select name="fuelId" className="select-field input-small" value={newDelivery.fuelId} onChange={handleDeliveryChange} required>
-              <option value="" disabled>Paliwo</option>
-              {fuels.map(f => <option key={f.id} value={f.id}>{f.type}</option>)}
-            </select>
-            <input type="number" name="quantity" className="input-field input-small" placeholder="Ilość litrów" value={newDelivery.quantity} onChange={handleDeliveryChange} required />
-            <input type="text" name="supplier" className="input-field input-small" placeholder="Nazwa dostawcy" value={newDelivery.supplier} onChange={handleDeliveryChange} required />
-            <input type="datetime-local" name="deliveryDate" className="input-field" style={{width: 'auto'}} value={newDelivery.deliveryDate} onChange={handleDeliveryChange} required />
-            <button type="submit" className="btn btn-warning">Zleć dostawę</button>
-          </form>
-          
-          <ul className="list-unstyled">
-            {deliveries.map(d => (
-              <li key={d.id} className="list-item flex-space-between">
-                <div>
-                  <strong>{d.fuel.type}</strong> - {d.quantity} L (Dostawca: {d.supplier})<br/> 
-                  Planowana data: {new Date(d.deliveryDate).toLocaleString()} <br/>
-                  Status: <span className="text-bold" style={{ color: d.status === 'Dostarczona' ? 'green' : 'orange' }}>{d.status}</span>
-                </div>
-                {d.status !== 'Dostarczona' && <button onClick={() => handleCompleteDelivery(d.id)} className="btn btn-primary">Odbierz dostawę</button>}
-              </li>
-            ))}
-          </ul>
-        </div>
+        )}
         
         {renderMessage()}
         <button onClick={logout} className="btn btn-danger" style={{marginTop: '30px'}}>Wyloguj się</button>
@@ -243,7 +380,6 @@ function App() {
               </div>
             </div>
 
-            {/* ZMIANA: Faktura zawsze widoczna, niezależnie od tego czy skanowaliśmy klienta */}
             <div className="flex-row text-left" style={{ justifyContent: 'flex-start', alignItems: 'center' }}>
               <input type="checkbox" name="issueInvoice" id="issueInvoice" checked={posData.issueInvoice} onChange={handlePosChange} style={{ transform: 'scale(1.5)', margin: '10px' }} />
               <label htmlFor="issueInvoice" className="text-bold">Wystaw Fakturę VAT</label>
