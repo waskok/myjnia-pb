@@ -453,7 +453,6 @@ app.get('/api/owner/customers', async (req, res) => {
   }
 });
 
-// --- GENEROWANIE RAPORTÓW ---
 // ==========================================
 // MODUŁ RAPORTÓW WŁAŚCICIELA
 // ==========================================
@@ -466,17 +465,54 @@ app.get('/api/owner/reports', async (req, res) => {
 
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
-    // 1. Obliczanie całkowitego utargu ze wszystkich transakcji
+    // Odczytujemy filtry z zapytania (np. period=monthly, date=2026-05-01)
+    const { period, date } = req.query;
+    let dateFilter: any = {};
+
+    if (period && period !== 'all' && date) {
+      const targetDate = new Date(date as string);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      const day = targetDate.getDate();
+
+      let startDate: Date;
+      let endDate: Date;
+
+      if (period === 'daily') {
+        startDate = new Date(year, month, day, 0, 0, 0);
+        endDate = new Date(year, month, day, 23, 59, 59, 999);
+      } else if (period === 'monthly') {
+        startDate = new Date(year, month, 1, 0, 0, 0);
+        endDate = new Date(year, month + 1, 0, 23, 59, 59, 999); // Ostatni dzień miesiąca
+      } else { // yearly
+        startDate = new Date(year, 0, 1, 0, 0, 0);
+        endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+      }
+
+      dateFilter = {
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      };
+    }
+
+    // 1. Obliczanie całkowitego utargu w zadanym oknie czasowym
     const revenueStats = await prisma.transaction.aggregate({
-      _sum: { totalAmount: true }
+      _sum: { totalAmount: true },
+      where: dateFilter
     });
 
-    // 2. Liczba wszystkich transakcji
-    const transactionCount = await prisma.transaction.count();
+    // 2. Liczba transakcji w zadanym oknie
+    const transactionCount = await prisma.transaction.count({
+      where: dateFilter
+    });
 
-    // 3. Pobranie 15 ostatnich transakcji z imionami klienta i pracownika
+    // 3. Pobranie transakcji z detalami
+    // Jeśli wybieramy konkretny okres, pobieramy do 100 transakcji. Jeśli "cały czas" - ostatnie 15.
     const recentTransactions = await prisma.transaction.findMany({
-      take: 15,
+      take: period === 'all' ? 15 : 100,
+      where: dateFilter,
       orderBy: { date: 'desc' },
       include: {
         customer: { select: { firstName: true, lastName: true } },
@@ -494,7 +530,6 @@ app.get('/api/owner/reports', async (req, res) => {
     res.status(500).json({ error: 'Błąd generowania raportów.' });
   }
 });
-
 app.get('/api/owner/deliveries', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
