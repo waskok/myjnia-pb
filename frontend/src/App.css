@@ -85,3 +85,65 @@ h1, h2, h3, h4, h5, h6 {
 .msg { margin-top: 15px; font-weight: bold; text-align: center; padding: 10px; border-radius: 5px; }
 .msg-success { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
 .msg-error { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; }
+/* =========================================
+   DODATKOWE STYLE (Zakładki, marginesy, kasy)
+   ========================================= */
+
+.tabs-container {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+
+.tab-btn-large {
+  padding: 15px 25px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.tab-active-paliwa { border: 2px solid #343a40; background-color: #343a40; color: white; }
+.tab-active-pracownicy { border: 2px solid #17a2b8; background-color: #17a2b8; color: white; }
+.tab-active-klienci { border: 2px solid #ffc107; background-color: #ffc107; color: black; }
+.tab-inactive { border: 1px solid #ccc; background-color: #f8f9fa; color: black; }
+
+.verification-box {
+  padding: 10px;
+  background-color: #d4edda;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.payment-summary {
+  padding: 15px;
+  background-color: #e9ecef;
+  border-radius: 5px;
+  font-size: 18px;
+  margin: 15px 0;
+}
+
+.checkbox-large {
+  transform: scale(1.5);
+  margin: 10px;
+}
+
+/* Klasy pomocnicze (Utility classes) */
+.mt-10 { margin-top: 10px; }
+.mt-20 { margin-top: 20px; }
+.mt-30 { margin-top: 30px; }
+.mb-15 { margin-bottom: 15px; }
+.mb-20 { margin-bottom: 20px; }
+.w-auto { width: auto; }
+.w-60 { width: 60px; }
+.flex-1 { flex: 1; }
+.flex-end { align-items: flex-end; }
+.flex-start { justify-content: flex-start; align-items: center; }
+.overflow-x-auto { overflow-x: auto; }
+.text-success { color: #155724; }
+.text-danger { color: red; font-weight: bold; }
