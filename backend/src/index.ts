@@ -454,7 +454,9 @@ app.get('/api/owner/customers', async (req, res) => {
 });
 
 // --- GENEROWANIE RAPORTÓW ---
-
+// ==========================================
+// MODUŁ RAPORTÓW WŁAŚCICIELA
+// ==========================================
 app.get('/api/owner/reports', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -464,7 +466,7 @@ app.get('/api/owner/reports', async (req, res) => {
 
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
-    // 1. Obliczanie całkowitego utargu
+    // 1. Obliczanie całkowitego utargu ze wszystkich transakcji
     const revenueStats = await prisma.transaction.aggregate({
       _sum: { totalAmount: true }
     });
@@ -472,12 +474,11 @@ app.get('/api/owner/reports', async (req, res) => {
     // 2. Liczba wszystkich transakcji
     const transactionCount = await prisma.transaction.count();
 
-    // 3. Pobranie 15 ostatnich transakcji z detalami
+    // 3. Pobranie 15 ostatnich transakcji z imionami klienta i pracownika
     const recentTransactions = await prisma.transaction.findMany({
       take: 15,
       orderBy: { date: 'desc' },
       include: {
-        items: true,
         customer: { select: { firstName: true, lastName: true } },
         employee: { select: { firstName: true, lastName: true } }
       }

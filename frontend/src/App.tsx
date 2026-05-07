@@ -10,13 +10,17 @@ interface Fuel { id: number; type: string; pricePerLiter: number; tankLevel: num
 interface Delivery { id: number; fuel: Fuel; quantity: number; status: string; deliveryDate: string; supplier: string; owner?: { firstName: string; lastName: string; } }
 interface MonitoringData { fuels: Fuel[]; lpg: { pressure: string; temp: string; }; carWash: { bay: number; occupied: boolean; camera: string; }[]; alerts: string[]; }
 
+// NOWE TYPY DO RAPORTÓW
+interface Transaction { id: number; totalAmount: number; date: string; paymentMethod: string; customer?: { firstName: string; lastName: string; }; employee: { firstName: string; lastName: string; }; }
+interface ReportData { totalRevenue: number; totalCount: number; transactions: Transaction[]; }
+
 function App() {
   const [message, setMessage] = useState('');
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
   
-  // ZAKŁADKI WŁAŚCICIELA I PRACOWNIKA (Tutaj dodano 'monitoring')
-  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring'>('paliwa');
+  // ZAKŁADKI WŁAŚCICIELA I PRACOWNIKA (Dodano 'raporty' do typu)
+  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring' | 'raporty'>('paliwa');
   const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring'>('pos');
 
   // --- STANY KLIENTA ---
@@ -45,6 +49,9 @@ function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [newEmployee, setNewEmployee] = useState({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' });
   const [monitoringData, setMonitoringData] = useState<MonitoringData | null>(null);
+  
+  // STAN RAPORTÓW
+  const [reportData, setReportData] = useState<ReportData | null>(null);
 
   // --- HANDLERY ZMIAN ---
   const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -65,7 +72,6 @@ function App() {
   const fetchEmployees = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/employees', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setEmployees(await res.json()); } catch (e) { console.error(e); } };
   const fetchCustomers = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/customers', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setCustomers(await res.json()); } catch (e) { console.error(e); } };
   
-  // POBIERANIE MONITORINGU
   const fetchMonitoring = async () => { 
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -73,6 +79,16 @@ function App() {
       const res = await fetch('http://localhost:5000/api/monitoring', { headers: { 'Authorization': `Bearer ${token}` } }); 
       if (res.ok) setMonitoringData(await res.json()); 
     } catch (e) { console.error(e); } 
+  };
+
+  // NOWA FUNKCJA POBIERANIA RAPORTÓW
+  const fetchReports = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await fetch('http://localhost:5000/api/owner/reports', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) setReportData(await res.json());
+    } catch (e) { console.error(e); }
   };
 
   // --- LOGOWANIE ---
@@ -148,7 +164,7 @@ function App() {
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
   const renderMessage = () => message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>;
 
-  // --- RENDEROWANIE ZAKŁADKI MONITORINGU ---
+  // --- RENDEROWANIE MONITORINGU ---
   const renderMonitoringTab = () => (
     <div className="card card-light" style={{ borderColor: '#6c757d' }}>
       <div className="flex-space-between mb-20">
@@ -165,7 +181,6 @@ function App() {
       )}
 
       <div className="dashboard-grid">
-        {/* Czujniki zbiorników */}
         {monitoringData?.fuels.map(f => (
           <div key={f.id} className="dashboard-card">
             <h4>Zbiornik {f.type}</h4>
@@ -175,8 +190,6 @@ function App() {
             </div>
           </div>
         ))}
-
-        {/* Stacja LPG */}
         {monitoringData?.lpg && (
           <div className="dashboard-card" style={{ borderColor: '#17a2b8' }}>
             <h4 style={{ color: '#17a2b8' }}>Instalacja LPG</h4>
@@ -184,15 +197,12 @@ function App() {
             <div className="mt-10"><strong>Temperatura:</strong> {monitoringData.lpg.temp} °C</div>
           </div>
         )}
-
-        {/* Kamery myjni */}
         <div className="dashboard-card" style={{ borderColor: '#ffc107' }}>
           <h4 style={{ color: '#ffc107' }}>Kamery Myjni (CCTV)</h4>
           <ul className="list-unstyled mt-10">
             {monitoringData?.carWash.map(bay => (
               <li key={bay.bay} style={{ marginBottom: '10px' }}>
-                Stanowisko {bay.bay}: 
-                <span className="text-bold" style={{ color: bay.occupied ? 'red' : 'green', marginLeft: '5px' }}>{bay.occupied ? 'Zajęte' : 'Wolne'}</span>
+                Stanowisko {bay.bay}: <span className="text-bold" style={{ color: bay.occupied ? 'red' : 'green', marginLeft: '5px' }}>{bay.occupied ? 'Zajęte' : 'Wolne'}</span>
                 <span style={{ marginLeft: '10px', fontSize: '12px' }}>[Kamera: {bay.camera}]</span>
               </li>
             ))}
@@ -202,7 +212,6 @@ function App() {
     </div>
   );
 
-  // Kalkulacje Kasy
   const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
   const costPLN = selectedFuel ? (selectedFuel.pricePerLiter * posData.quantity).toFixed(2) : '0.00';
   const pointsCostPerLiter = selectedFuel?.type === 'LPG' ? 50 : 100;
@@ -222,7 +231,52 @@ function App() {
           <button onClick={() => setActiveTab('pracownicy')} className={`tab-btn-large ${activeTab === 'pracownicy' ? 'tab-active-pracownicy' : 'tab-inactive'}`}>👨‍🔧 Pracownicy</button>
           <button onClick={() => setActiveTab('klienci')} className={`tab-btn-large ${activeTab === 'klienci' ? 'tab-active-klienci' : 'tab-inactive'}`}>👥 Klienci</button>
           <button onClick={() => { setActiveTab('monitoring'); fetchMonitoring(); }} className={`tab-btn-large ${activeTab === 'monitoring' ? 'tab-active-paliwa' : 'tab-inactive'}`}>📡 Monitoring</button>
+          
+          {/* NOWY PRZYCISK: RAPORTY */}
+          <button onClick={() => { setActiveTab('raporty'); fetchReports(); }} className={`tab-btn-large ${activeTab === 'raporty' ? 'tab-active-pracownicy' : 'tab-inactive'}`}>📊 Raporty</button>
         </div>
+
+        {/* NOWA SEKCJA: WIDOK RAPORTÓW */}
+        {activeTab === 'raporty' && (
+          <div className="card card-light">
+            <h3 className="text-left">Raporty Sprzedaży i Statystyki 📊</h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+              <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
+                <h4 style={{ margin: 0, color: '#6c757d' }}>Całkowity Obrót</h4>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#28a745' }}>{reportData?.totalRevenue.toFixed(2)} zł</div>
+              </div>
+              <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
+                <h4 style={{ margin: 0, color: '#6c757d' }}>Liczba Transakcji</h4>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#212529' }}>{reportData?.totalCount}</div>
+              </div>
+              <div style={{ background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #e0e0e0', textAlign: 'center' }}>
+                <h4 style={{ margin: 0, color: '#6c757d' }}>Średnia Transakcja</h4>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#17a2b8' }}>{((reportData?.totalRevenue || 0) / (reportData?.totalCount || 1)).toFixed(2)} zł</div>
+              </div>
+            </div>
+
+            <div className="card card-gray">
+              <h3 className="text-left">Ostatnie Transakcje (Kasa POS)</h3>
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead><tr><th>Data</th><th>Klient</th><th>Kwota</th><th>Płatność</th><th>Kasjer</th></tr></thead>
+                  <tbody>
+                    {reportData?.transactions.map(t => (
+                      <tr key={t.id}>
+                        <td>{new Date(t.date).toLocaleString()}</td>
+                        <td>{t.customer ? `${t.customer.firstName} ${t.customer.lastName}` : <span style={{color: '#888'}}>Niezarejestrowany</span>}</td>
+                        <td className="text-bold">{t.totalAmount.toFixed(2)} zł</td>
+                        <td>{t.paymentMethod}</td>
+                        <td>{t.employee.firstName}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {activeTab === 'paliwa' && (
           <>
