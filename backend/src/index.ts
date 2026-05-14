@@ -14,6 +14,13 @@ const PORT = process.env.PORT || 5000;
 app.use(cors()); 
 app.use(express.json()); 
 
+// Typ dla Tokena, aby uniknąć używania "any"
+interface TokenPayload {
+  id: number;
+  role?: string;
+  email?: string;
+}
+
 // ==========================================
 // ENDPOINTY TESTOWE
 // ==========================================
@@ -139,9 +146,15 @@ app.post('/api/reservations', async (req, res) => {
     const { token, washServiceId, date } = req.body;
     if (!token || !washServiceId || !date) return res.status(400).json({ error: 'Brakujące dane rezerwacji!' });
 
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    // WALIDACJA: Blokada rezerwacji w przeszłości
+    const reservationDate = new Date(date);
+    if (reservationDate < new Date()) {
+      return res.status(400).json({ error: 'Nie można rezerwować terminów w przeszłości!' });
+    }
+
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     await prisma.reservation.create({
-      data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: new Date(date), status: 'Oczekująca' }
+      data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: reservationDate, status: 'Oczekująca' }
     });
 
     res.status(201).json({ message: 'Rezerwacja potwierdzona i zapisana w bazie!' });
@@ -158,7 +171,7 @@ app.get('/api/my-reservations', async (req, res) => {
     const token = authHeader.split(' ')[1]; 
     if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
 
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     const userReservations = await prisma.reservation.findMany({
       where: { customerId: decoded.id },
       include: { washService: true }, 
@@ -173,14 +186,12 @@ app.get('/api/my-reservations', async (req, res) => {
 });
 
 // --- PROFIL I HISTORIA KLIENTA ---
-
-// 1. Pobieranie danych profilu (w tym punktów)
 app.get('/api/my-profile', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
 
     const customer = await prisma.customer.findUnique({
       where: { id: decoded.id },
@@ -192,13 +203,12 @@ app.get('/api/my-profile', async (req, res) => {
   }
 });
 
-// 2. Pobieranie historii zakupów
 app.get('/api/my-transactions', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
 
     const transactions = await prisma.transaction.findMany({
       where: { customerId: decoded.id },
@@ -229,7 +239,7 @@ app.get('/api/employee/customer/:identifier', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
 
     if (decoded.role !== 'employee' && decoded.role !== 'owner') {
       return res.status(403).json({ error: 'Brak uprawnień!' });
@@ -257,7 +267,7 @@ app.post('/api/transactions/fuel', async (req, res) => {
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Brak poprawnego tokena!' });
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
 
     if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień kasjera!' });
 
@@ -341,7 +351,7 @@ app.get('/api/employee/reservations', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień.' });
 
     const allReservations = await prisma.reservation.findMany({
@@ -360,7 +370,7 @@ app.patch('/api/employee/reservations/:id/complete', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień!' });
 
     await prisma.reservation.update({ where: { id: Number(req.params.id) }, data: { status: 'Zakończona' } });
@@ -368,6 +378,23 @@ app.patch('/api/employee/reservations/:id/complete', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd aktualizacji statusu.' });
+  }
+});
+
+// NOWY ENDPOINT: ANULOWANIE REZERWACJI (DLA PRACOWNIKA)
+app.patch('/api/employee/reservations/:id/cancel', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    await prisma.reservation.update({ where: { id: Number(req.params.id) }, data: { status: 'Anulowana' } });
+    res.status(200).json({ message: 'Rezerwacja została anulowana!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd podczas anulowania rezerwacji.' });
   }
 });
 
@@ -379,7 +406,7 @@ app.get('/api/monitoring', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
 
     if (decoded.role !== 'employee' && decoded.role !== 'owner') {
       return res.status(403).json({ error: 'Brak uprawnień!' });
@@ -431,7 +458,7 @@ app.get('/api/owner/employees', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
     const employees = await prisma.employee.findMany({
@@ -448,7 +475,7 @@ app.post('/api/owner/employees', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
     const { firstName, lastName, role, login, password, email, phone } = req.body;
@@ -469,7 +496,7 @@ app.delete('/api/owner/employees/:id', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
     await prisma.employee.delete({ where: { id: Number(req.params.id) } });
@@ -501,11 +528,10 @@ app.get('/api/owner/reports', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
 
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
-    // Odczytujemy filtry z zapytania (np. period=monthly, date=2026-05-01)
     const { period, date } = req.query;
     let dateFilter: any = {};
 
@@ -523,8 +549,8 @@ app.get('/api/owner/reports', async (req, res) => {
         endDate = new Date(year, month, day, 23, 59, 59, 999);
       } else if (period === 'monthly') {
         startDate = new Date(year, month, 1, 0, 0, 0);
-        endDate = new Date(year, month + 1, 0, 23, 59, 59, 999); // Ostatni dzień miesiąca
-      } else { // yearly
+        endDate = new Date(year, month + 1, 0, 23, 59, 59, 999); 
+      } else { 
         startDate = new Date(year, 0, 1, 0, 0, 0);
         endDate = new Date(year, 11, 31, 23, 59, 59, 999);
       }
@@ -537,19 +563,15 @@ app.get('/api/owner/reports', async (req, res) => {
       };
     }
 
-    // 1. Obliczanie całkowitego utargu w zadanym oknie czasowym
     const revenueStats = await prisma.transaction.aggregate({
       _sum: { totalAmount: true },
       where: dateFilter
     });
 
-    // 2. Liczba transakcji w zadanym oknie
     const transactionCount = await prisma.transaction.count({
       where: dateFilter
     });
 
-    // 3. Pobranie transakcji z detalami
-    // Jeśli wybieramy konkretny okres, pobieramy do 100 transakcji. Jeśli "cały czas" - ostatnie 15.
     const recentTransactions = await prisma.transaction.findMany({
       take: period === 'all' ? 15 : 100,
       where: dateFilter,
@@ -570,6 +592,7 @@ app.get('/api/owner/reports', async (req, res) => {
     res.status(500).json({ error: 'Błąd generowania raportów.' });
   }
 });
+
 app.get('/api/owner/deliveries', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -589,7 +612,7 @@ app.post('/api/owner/deliveries', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Tylko właściciel może zlecać dostawy!' });
 
     const { fuelId, quantity, supplier, deliveryDate } = req.body;
