@@ -172,6 +172,46 @@ app.get('/api/my-reservations', async (req, res) => {
   }
 });
 
+// --- PROFIL I HISTORIA KLIENTA ---
+
+// 1. Pobieranie danych profilu (w tym punktów)
+app.get('/api/my-profile', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: decoded.id },
+      select: { loyaltyPoints: true, firstName: true }
+    });
+    res.json(customer);
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania profilu.' });
+  }
+});
+
+// 2. Pobieranie historii zakupów
+app.get('/api/my-transactions', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
+
+    const transactions = await prisma.transaction.findMany({
+      where: { customerId: decoded.id },
+      include: { items: true },
+      orderBy: { date: 'desc' }
+    });
+    res.json(transactions);
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd pobierania historii zakupów.' });
+  }
+});
+
+
 // ==========================================
 // MODUŁ KASJERA (POS) I SPRZEDAŻY
 // ==========================================
