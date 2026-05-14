@@ -14,7 +14,6 @@ const PORT = process.env.PORT || 5000;
 app.use(cors()); 
 app.use(express.json()); 
 
-// Typ dla Tokena, aby uniknąć używania "any"
 interface TokenPayload {
   id: number;
   role?: string;
@@ -150,6 +149,24 @@ app.post('/api/reservations', async (req, res) => {
     const reservationDate = new Date(date);
     if (reservationDate < new Date()) {
       return res.status(400).json({ error: 'Nie można rezerwować terminów w przeszłości!' });
+    }
+
+    // WALIDACJA: Godzina odstępu od innych rezerwacji
+    const oneHourBefore = new Date(reservationDate.getTime() - 60 * 60 * 1000);
+    const oneHourAfter = new Date(reservationDate.getTime() + 60 * 60 * 1000);
+
+    const conflict = await prisma.reservation.findFirst({
+      where: {
+        status: { not: 'Anulowana' },
+        date: {
+          gt: oneHourBefore,
+          lt: oneHourAfter
+        }
+      }
+    });
+
+    if (conflict) {
+      return res.status(400).json({ error: 'Termin zajęty! Pomiędzy rezerwacjami musi być minimum godzina odstępu.' });
     }
 
     const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
@@ -381,7 +398,6 @@ app.patch('/api/employee/reservations/:id/complete', async (req, res) => {
   }
 });
 
-// NOWY ENDPOINT: ANULOWANIE REZERWACJI (DLA PRACOWNIKA)
 app.patch('/api/employee/reservations/:id/cancel', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -533,7 +549,9 @@ app.get('/api/owner/reports', async (req, res) => {
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
     const { period, date } = req.query;
-    let dateFilter: any = {};
+    
+    // Określamy typ dla dateFilter
+    let dateFilter: { date?: { gte: Date; lte: Date } } = {};
 
     if (period && period !== 'all' && date) {
       const targetDate = new Date(date as string);
