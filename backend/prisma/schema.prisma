@@ -19,6 +19,7 @@ model Owner {
   password       String
   employees      Employee[]
   fuelDeliveries FuelDelivery[]  
+  workSchedules  WorkSchedule[]
 }
 
 model Employee {
@@ -33,6 +34,7 @@ model Employee {
   email     String?       
   owner     Owner         @relation(fields: [ownerId], references: [id])
   transactions Transaction[]
+  workSchedules  WorkSchedule[]
 }
 
 model Customer {
@@ -233,4 +235,13 @@ model SalesReport {
   id    Int   @id @default(autoincrement())
   month Int
   total Float
+}
+model WorkSchedule {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  ownerId    Int
+  date       DateTime
+  shift      String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  owner      Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 }
