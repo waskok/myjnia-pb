@@ -25,6 +25,10 @@ function App() {
   const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring'>('pos');
   const [activeCustTab, setActiveCustTab] = useState<ActiveCustTab>('book');
 
+  // NOWE STANY: Filtry dla pracownika
+  const [empResDateFilter, setEmpResDateFilter] = useState('');
+  const [empResPhoneFilter, setEmpResPhoneFilter] = useState('');
+
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', address: '', phone: '', email: '', password: '' });
   const [services, setServices] = useState<WashService[]>([]);
@@ -65,9 +69,9 @@ function App() {
 
   // --- POMOCNICZA FUNKCJA DO KOLORÓW STATUSU ---
   const getStatusColor = (status: string) => {
-    if (status === 'Zakończona') return '#28a745'; // zielony
-    if (status === 'Anulowana') return '#dc3545';  // czerwony
-    if (status === 'Oczekująca') return '#ffc107'; // żółty
+    if (status === 'Zakończona') return '#28a745'; 
+    if (status === 'Anulowana') return '#dc3545';  
+    if (status === 'Oczekująca') return '#ffc107'; 
     return '#000';
   };
 
@@ -156,12 +160,27 @@ function App() {
   // --- AKCJE KASY I INNE ---
   const handleVerifyCustomer = async () => { if (!posCustomerQuery) return; try { const token = localStorage.getItem('token'); const res = await fetch(`http://localhost:5000/api/employee/customer/${encodeURIComponent(posCustomerQuery)}`, { headers: { 'Authorization': `Bearer ${token}` } }); const data = await res.json(); if (res.ok) { setPosVerifiedCustomer(data); setPosData({ ...posData, customerEmail: data.email }); setMessage('✅ Zweryfikowano!'); } else { setPosVerifiedCustomer(null); setPosData({ ...posData, customerEmail: '' }); setMessage('❌ ' + data.error); } } catch (e) { console.error(e); } };
   const handlePOSSubmit = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); setPosVerifiedCustomer(null); setPosCustomerQuery(''); fetchFuels(); } else setMessage('❌ ' + data.error); } catch (e) { console.error(e); } };
-  const handleReservation = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate }) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setReservationDate(''); fetchCustomerData(token); } else { setMessage('❌ ' + data.error); } } catch (e) { console.error(e); } };
+  const handleReservation = async (e: React.FormEvent) => { 
+    e.preventDefault(); 
+    try { 
+      const token = localStorage.getItem('token'); 
+      if (!token) return; 
+      const res = await fetch('http://localhost:5000/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate }) }); 
+      const data = await res.json(); 
+      if (res.ok) { 
+        setMessage('✅ ' + data.message); 
+        setReservationDate(''); 
+        fetchCustomerData(token); 
+      } else {
+        setMessage('❌ ' + data.error);
+      }
+    } catch (e) { console.error(e); } 
+  };
+
   const handleCompleteReservation = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Zakończono!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };
   
-  // NOWA FUNKCJA: Anulowanie rezerwacji
   const handleCancelReservation = async (id: number) => {
-    if (!window.confirm('Czy na pewno chcesz anulować rezerwację?')) return;
+    if (!window.confirm('Czy na pewno chcesz anulować tę rezerwację?')) return;
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
@@ -435,6 +454,8 @@ function App() {
           </div>
         )}
 
+        {activeTab === 'monitoring' && renderMonitoringTab()}
+
         {renderMessage()}
         <button onClick={logout} className="btn btn-danger mt-30">Wyloguj się</button>
       </div>
@@ -506,12 +527,42 @@ function App() {
         {activeEmpTab === 'rezerwacje' && (
           <div className="card card-gray">
             <h3>Rezerwacje myjni do obsłużenia</h3>
-            {allReservations.length === 0 ? <p>Brak rezerwacji.</p> : (
+            
+            {/* NOWE: Filtry dla pracownika */}
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', alignItems: 'center', background: '#f8f9fa', padding: '15px', borderRadius: '8px', border: '1px solid #ced4da' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Wybierz dzień:</label>
+                <input type="date" className="input-field input-small" style={{ margin: 0 }} value={empResDateFilter} onChange={e => setEmpResDateFilter(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Szukaj po numerze telefonu:</label>
+                <input type="text" className="input-field input-small" placeholder="Np. 123456789" style={{ margin: 0 }} value={empResPhoneFilter} onChange={e => setEmpResPhoneFilter(e.target.value)} />
+              </div>
+              <div style={{ marginTop: '22px' }}>
+                <button type="button" className="btn btn-light" onClick={() => { setEmpResDateFilter(''); setEmpResPhoneFilter(''); }}>Wyczyść filtry</button>
+              </div>
+            </div>
+
+            {allReservations.length === 0 ? <p>Brak rezerwacji w systemie.</p> : (
               <ul className="list-unstyled">
-                {allReservations.map((res) => (
+                {allReservations.filter(res => {
+                  let matchDate = true;
+                  let matchPhone = true;
+                  if (empResDateFilter) {
+                    const resDay = new Date(res.date).toISOString().substring(0, 10);
+                    matchDate = resDay === empResDateFilter;
+                  }
+                  if (empResPhoneFilter) {
+                    const phone = res.customer?.phone || '';
+                    matchPhone = phone.includes(empResPhoneFilter);
+                  }
+                  return matchDate && matchPhone;
+                }).map((res) => (
                   <li key={res.id} className="list-item flex-space-between" style={{ alignItems: 'center' }}>
                     <div>
                       <strong>{new Date(res.date).toLocaleString()}</strong> <br/> 
+                      {/* NOWE: Wyświetlanie danych klienta */}
+                      Klient: {res.customer ? `${res.customer.firstName} ${res.customer.lastName} (Tel: ${res.customer.phone})` : 'Brak danych'} <br/>
                       Usługa: {res.washService.type} <br/> 
                       Status: <b style={{ color: getStatusColor(res.status) }}>{res.status}</b>
                     </div>
@@ -569,6 +620,7 @@ function App() {
                 {services.map(s => <option key={s.id} value={s.id}>{s.type} - {s.price} zł (+{s.loyaltyPoints} pkt)</option>)}
               </select>
               <label className="mt-10">Data i godzina rezerwacji:</label>
+              {/* NOWE: Zabezpieczenie frontendu (min=teraz) */}
               <input type="datetime-local" className="input-field" value={reservationDate} min={getMinDateTime()} onChange={(e) => setReservationDate(e.target.value)} required />
               <button type="submit" className="btn btn-success mt-10">Potwierdź rezerwację</button>
             </form>
@@ -595,7 +647,7 @@ function App() {
                   </table>
                 </div>
                 <p style={{ fontSize: '13px', color: '#6c757d', marginTop: '15px', textAlign: 'left', fontStyle: 'italic' }}>
-                  W celu anulowania rezerwacji prosimy o kontakt telefoniczny.
+                  W celu anulowania rezerwacji prosimy o kontakt telefoniczny z pracownikiem stacji.
                 </p>
               </>
             )}
@@ -625,6 +677,7 @@ function App() {
           </div>
         )}
 
+        {/* NOWA ZAKŁADKA KONTAKT */}
         {activeCustTab === 'contact' && (
           <div className="card card-light mt-20 text-left">
             <h3 style={{ marginTop: 0 }}>Kontakt z Myjnią PB</h3>
