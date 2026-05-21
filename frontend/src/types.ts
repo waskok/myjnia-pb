@@ -11,3 +11,17 @@ export interface ReportData { totalRevenue: number; totalCount: number; transact
 
 export type ReportPeriodType = 'all' | 'daily' | 'monthly' | 'yearly';
 export type ActiveCustTab = 'book' | 'resHistory' | 'buyHistory' | 'contact';
+
+export interface ScheduleEntry {
+  id: number;
+  date: string;
+  startTime: string;
+  employeeId: number;
+  employee: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'role'>;
+}
+
+export interface ScheduleMonthData {
+  year: number;
+  month: number;
+  schedules: ScheduleEntry[];
+}

@@ -1,13 +1,23 @@
 import React from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
 import { MonitoringTab } from './MonitoringTab';
+import { OwnerScheduleTab } from './OwnerScheduleTab';
 import type { ReportPeriodType } from '../types';
 
 export const OwnerPanel: React.FC<AppLogic> = (props) => {
-  const { loggedInUser, logout, activeTab, setActiveTab, reportPeriod, setReportPeriod, reportDateStr, handleDateChange, fetchReports, reportData, fuels, newPrice, setNewPrice, handleUpdatePrice, newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery, newEmployee, setNewEmployee, handleAddEmployee, employees, handleDeleteEmployee, customers, fetchMonitoring, monitoringData, message } = props;
+  const {
+    loggedInUser, logout, activeTab, setActiveTab, reportPeriod, setReportPeriod, reportDateStr,
+    handleDateChange, fetchReports, reportData, fuels, newPrice, setNewPrice, handleUpdatePrice,
+    newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery,
+    newEmployee, setNewEmployee, handleAddEmployee, employees, handleDeleteEmployee, customers,
+    fetchMonitoring, monitoringData, message, fetchSchedule, scheduleYear, scheduleMonth, scheduleData,
+    selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime,
+    changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule,
+    handleDeleteScheduleEntry, setSelectedScheduleDates,
+  } = props;
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${activeTab === 'grafik' ? 'app-container-wide' : ''}`}>
       <div className="header-bar">
         <h2 style={{ margin: 0 }}>Witaj, {loggedInUser}! (Panel Właściciela) 💼</h2>
         <button onClick={logout} className="btn btn-danger">Wyloguj się</button>
@@ -16,6 +26,12 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
       <div className="tabs-container">
         <button onClick={() => setActiveTab('paliwa')} className={`tab-btn-large ${activeTab === 'paliwa' ? 'tab-active-primary' : 'tab-inactive'}`}>⛽ Paliwa</button>
         <button onClick={() => setActiveTab('pracownicy')} className={`tab-btn-large ${activeTab === 'pracownicy' ? 'tab-active-primary' : 'tab-inactive'}`}>👨‍🔧 Pracownicy</button>
+        <button
+          onClick={() => { setActiveTab('grafik'); fetchSchedule(); }}
+          className={`tab-btn-large ${activeTab === 'grafik' ? 'tab-active-primary' : 'tab-inactive'}`}
+        >
+          📅 Grafik
+        </button>
         <button onClick={() => setActiveTab('klienci')} className={`tab-btn-large ${activeTab === 'klienci' ? 'tab-active-primary' : 'tab-inactive'}`}>👥 Klienci</button>
         <button onClick={() => { setActiveTab('monitoring'); fetchMonitoring(); }} className={`tab-btn-large ${activeTab === 'monitoring' ? 'tab-active-primary' : 'tab-inactive'}`}>📡 Monitoring</button>
         <button onClick={() => { setActiveTab('raporty'); fetchReports(); }} className={`tab-btn-large ${activeTab === 'raporty' ? 'tab-active-primary' : 'tab-inactive'}`}>📊 Raporty</button>
@@ -166,6 +182,26 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
             </tbody>
           </table>
         </div>
+      )}
+
+      {activeTab === 'grafik' && (
+        <OwnerScheduleTab
+          scheduleYear={scheduleYear}
+          scheduleMonth={scheduleMonth}
+          scheduleData={scheduleData}
+          selectedScheduleDates={selectedScheduleDates}
+          scheduleEmployeeId={scheduleEmployeeId}
+          setScheduleEmployeeId={setScheduleEmployeeId}
+          scheduleStartTime={scheduleStartTime}
+          setScheduleStartTime={setScheduleStartTime}
+          employees={employees}
+          changeScheduleMonth={changeScheduleMonth}
+          handleScheduleMonthInput={handleScheduleMonthInput}
+          toggleScheduleDate={toggleScheduleDate}
+          handleSaveSchedule={handleSaveSchedule}
+          handleDeleteScheduleEntry={handleDeleteScheduleEntry}
+          setSelectedScheduleDates={setSelectedScheduleDates}
+        />
       )}
 
       {activeTab === 'monitoring' && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}

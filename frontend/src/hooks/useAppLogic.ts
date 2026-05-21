@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import type { WashService, Reservation, Transaction, Fuel, Customer, Delivery, Employee, MonitoringData, ReportData, ReportPeriodType, ActiveCustTab } from '../types';
+import type { WashService, Reservation, Transaction, Fuel, Customer, Delivery, Employee, MonitoringData, ReportData, ReportPeriodType, ActiveCustTab, ScheduleMonthData } from '../types';
 
 export const useAppLogic = () => {
   const [message, setMessage] = useState('');
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring' | 'raporty'>('paliwa');
+  const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring' | 'raporty' | 'grafik'>('paliwa');
   const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring'>('pos');
   const [activeCustTab, setActiveCustTab] = useState<ActiveCustTab>('book');
 
@@ -42,7 +42,15 @@ export const useAppLogic = () => {
   
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [reportPeriod, setReportPeriod] = useState<ReportPeriodType>('all');
-  const [reportDateStr, setReportDateStr] = useState<string>(new Date().toISOString().substring(0, 10)); 
+  const [reportDateStr, setReportDateStr] = useState<string>(new Date().toISOString().substring(0, 10));
+
+  const now = new Date();
+  const [scheduleYear, setScheduleYear] = useState(now.getFullYear());
+  const [scheduleMonth, setScheduleMonth] = useState(now.getMonth() + 1);
+  const [scheduleData, setScheduleData] = useState<ScheduleMonthData | null>(null);
+  const [selectedScheduleDates, setSelectedScheduleDates] = useState<string[]>([]);
+  const [scheduleEmployeeId, setScheduleEmployeeId] = useState('');
+  const [scheduleStartTime, setScheduleStartTime] = useState('08:00');
 
   const getMinDateTime = () => {
     const now = new Date();
@@ -86,6 +94,116 @@ export const useAppLogic = () => {
   const fetchEmployees = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/employees', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setEmployees(await res.json()); } catch (e) { console.error(e); } };
   const fetchCustomers = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/customers', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setCustomers(await res.json()); } catch (e) { console.error(e); } };
   const fetchMonitoring = async () => { const token = localStorage.getItem('token'); if (!token) return; try { const res = await fetch('http://localhost:5000/api/monitoring', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setMonitoringData(await res.json()); } catch (e) { console.error(e); } };
+
+  const fetchSchedule = async (year = scheduleYear, month = scheduleMonth) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/owner/schedule?year=${year}&month=${month}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        setScheduleData(data);
+        setScheduleYear(data.year);
+        setScheduleMonth(data.month);
+      } else {
+        setMessage('❌ ' + (data.error || 'Błąd pobierania grafiku.'));
+      }
+    } catch (e) {
+      console.error(e);
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
+
+  const changeScheduleMonth = (delta: number) => {
+    let y = scheduleYear;
+    let m = scheduleMonth + delta;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setScheduleYear(y);
+    setScheduleMonth(m);
+    setSelectedScheduleDates([]);
+    fetchSchedule(y, m);
+  };
+
+  const handleScheduleMonthInput = (val: string) => {
+    if (!val) return;
+    const [y, m] = val.split('-').map(Number);
+    if (!y || !m) return;
+    setScheduleYear(y);
+    setScheduleMonth(m);
+    setSelectedScheduleDates([]);
+    fetchSchedule(y, m);
+  };
+
+  const toggleScheduleDate = (dateStr: string) => {
+    setSelectedScheduleDates((prev) =>
+      prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr]
+    );
+  };
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    if (!scheduleEmployeeId) {
+      setMessage('❌ Wybierz pracownika.');
+      return;
+    }
+    if (selectedScheduleDates.length === 0) {
+      setMessage('❌ Zaznacz co najmniej jeden dzień w kalendarzu.');
+      return;
+    }
+    try {
+      const res = await fetch('http://localhost:5000/api/owner/schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          employeeId: Number(scheduleEmployeeId),
+          startTime: scheduleStartTime,
+          dates: selectedScheduleDates,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('✅ ' + data.message);
+        setSelectedScheduleDates([]);
+        fetchSchedule();
+      } else {
+        setMessage('❌ ' + (data.error || 'Błąd zapisu grafiku.'));
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
+
+  const handleDeleteScheduleEntry = async (id: number) => {
+    if (!window.confirm('Usunąć ten wpis z grafiku?')) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/owner/schedule/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('✅ ' + (data.message || 'Usunięto wpis.'));
+        fetchSchedule();
+      } else {
+        setMessage('❌ ' + (data.error || 'Błąd usuwania.'));
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
 
   const fetchReports = async (period = reportPeriod, dateVal = reportDateStr) => {
     const token = localStorage.getItem('token');
@@ -145,6 +263,6 @@ export const useAppLogic = () => {
 
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
-  return { message, loggedInUser, userRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleAddEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, logout };
+  return { message, loggedInUser, userRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleAddEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
 export type AppLogic = ReturnType<typeof useAppLogic>;
