@@ -1,27 +1,31 @@
-import React from 'react';
 import './App.css';
 import { useAppLogic } from './hooks/useAppLogic';
 import { AuthScreen } from './components/AuthScreen';
 import { CustomerPanel } from './components/CustomerPanel';
 import { EmployeePanel } from './components/EmployeePanel';
 import { OwnerPanel } from './components/OwnerPanel';
+import { Toast } from './components/Toast';
 
 function App() {
   const appLogic = useAppLogic();
 
+  let panel;
   if (appLogic.userRole === 'owner') {
-    return <OwnerPanel {...appLogic} />;
+    panel = <OwnerPanel {...appLogic} />;
+  } else if (appLogic.userRole === 'employee') {
+    panel = <EmployeePanel {...appLogic} />;
+  } else if (appLogic.userRole === 'customer') {
+    panel = <CustomerPanel {...appLogic} />;
+  } else {
+    panel = <AuthScreen {...appLogic} />;
   }
 
-  if (appLogic.userRole === 'employee') {
-    return <EmployeePanel {...appLogic} />;
-  }
-
-  if (appLogic.userRole === 'customer') {
-    return <CustomerPanel {...appLogic} />;
-  }
-
-  return <AuthScreen {...appLogic} />;
+  return (
+    <>
+      {panel}
+      <Toast message={appLogic.message} onDismiss={appLogic.clearMessage} />
+    </>
+  );
 }
 
 export default App;

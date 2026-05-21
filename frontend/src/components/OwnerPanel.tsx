@@ -10,7 +10,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     handleDateChange, fetchReports, reportData, fuels, newPrice, setNewPrice, handleUpdatePrice,
     newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery,
     newEmployee, setNewEmployee, handleAddEmployee, employees, handleDeleteEmployee, customers,
-    fetchMonitoring, monitoringData, message, fetchSchedule, scheduleYear, scheduleMonth, scheduleData,
+    fetchMonitoring, monitoringData, fetchSchedule, scheduleYear, scheduleMonth, scheduleData,
     selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime,
     changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule,
     handleDeleteScheduleEntry, setSelectedScheduleDates,
@@ -205,7 +205,6 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
       )}
 
       {activeTab === 'monitoring' && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}
-      {message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>}
     </div>
   );
 };

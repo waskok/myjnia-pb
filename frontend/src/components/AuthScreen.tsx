@@ -2,7 +2,7 @@ import React from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
 
 export const AuthScreen: React.FC<AppLogic> = (props) => {
-  const { loginMode, setLoginMode, isLogin, setIsLogin, handleAuthSubmit, formData, staffData, handleCustomerChange, handleStaffChange, message } = props;
+  const { loginMode, setLoginMode, isLogin, setIsLogin, handleAuthSubmit, formData, staffData, handleCustomerChange, handleStaffChange } = props;
   const isIndividual = formData.accountType === 'individual';
 
   return (
@@ -65,7 +65,6 @@ export const AuthScreen: React.FC<AppLogic> = (props) => {
           </form>
         </>
       )}
-      {message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>}
     </div>
   );
 };

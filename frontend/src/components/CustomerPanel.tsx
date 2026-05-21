@@ -2,7 +2,7 @@ import React from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
 
 export const CustomerPanel: React.FC<AppLogic> = (props) => {
-  const { loggedInUser, loyaltyPoints, logout, activeCustTab, setActiveCustTab, handleReservation, selectedService, setSelectedService, services, reservationDate, getMinDateTime, setReservationDate, myReservations, getStatusColor, myTransactions, message } = props;
+  const { loggedInUser, loyaltyPoints, logout, activeCustTab, setActiveCustTab, handleReservation, selectedService, setSelectedService, services, reservationDate, getMinDateTime, setReservationDate, myReservations, getStatusColor, myTransactions } = props;
 
   return (
     <div className="app-container">
@@ -97,7 +97,6 @@ export const CustomerPanel: React.FC<AppLogic> = (props) => {
         </div>
       )}
       
-      {message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>}
     </div>
   );
 };
