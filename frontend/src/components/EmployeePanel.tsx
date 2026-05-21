@@ -10,7 +10,7 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
     posCustomerQuery, setPosCustomerQuery, handleVerifyCustomer, posVerifiedCustomer, setPosData,
     posData, handlePOSSubmit, fuels, handlePosChange, empResDateFilter, setEmpResDateFilter,
     empResPhoneFilter, setEmpResPhoneFilter, allReservations, getStatusColor,
-    handleCompleteReservation, handleCancelReservation, monitoringData, message,
+    handleCompleteReservation, handleCancelReservation, monitoringData,
   } = props;
 
   const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
@@ -144,7 +144,6 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
       )}
 
       {activeEmpTab === 'monitoring' && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}
-      {message && <div className={`msg ${message.includes('✅') ? 'msg-success' : 'msg-error'}`}>{message}</div>}
     </div>
   );
 };

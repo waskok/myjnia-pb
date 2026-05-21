@@ -35,6 +35,10 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
 }
 
+.login-container-register {
+  max-width: 440px;
+}
+
 .card { margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; }
 .card-light { background-color: #f8f9fa; border-color: #dee2e6; }
 .card-gray { background-color: #e9ecef; border-color: #ced4da; }
@@ -85,6 +89,73 @@ h1, h2, h3, h4, h5, h6 {
 .msg { margin-top: 15px; font-weight: bold; text-align: center; padding: 10px; border-radius: 5px; }
 .msg-success { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
 .msg-error { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; }
+
+/* Toast — dolny popup, auto-znikanie */
+.toast-popup {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-weight: bold;
+  font-size: 15px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  animation: toast-pulse 0.75s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.toast-success {
+  color: #065f46;
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 2px solid #10b981;
+}
+
+.toast-error {
+  color: #991b1b;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border: 2px solid #ef4444;
+  animation: toast-pulse-error 0.75s ease-in-out infinite;
+}
+
+.toast-exit {
+  animation: toast-fade-out 0.35s ease forwards !important;
+}
+
+@keyframes toast-pulse {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.25);
+  }
+  50% {
+    transform: translateX(-50%) scale(1.04);
+    box-shadow: 0 14px 36px rgba(16, 185, 129, 0.4);
+  }
+}
+
+@keyframes toast-pulse-error {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+    box-shadow: 0 10px 30px rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    transform: translateX(-50%) scale(1.03);
+    box-shadow: 0 14px 36px rgba(239, 68, 68, 0.35);
+  }
+}
+
+@keyframes toast-fade-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px) scale(0.96);
+  }
+}
 /* =========================================
    DODATKOWE STYLE (Zakładki, marginesy, kasy)
    ========================================= */
