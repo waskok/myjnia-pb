@@ -240,8 +240,11 @@ model WorkSchedule {
   id         Int      @id @default(autoincrement())
   employeeId Int
   ownerId    Int
-  date       DateTime
+  date       DateTime @db.Date
   shift      String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   owner      Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([ownerId, date])
 }

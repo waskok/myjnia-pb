@@ -1,9 +1,17 @@
 import React from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
 import { MonitoringTab } from './MonitoringTab';
+import { ScheduleCalendar } from './ScheduleCalendar';
 
 export const EmployeePanel: React.FC<AppLogic> = (props) => {
-  const { loggedInUser, logout, activeEmpTab, setActiveEmpTab, fetchMonitoring, posCustomerQuery, setPosCustomerQuery, handleVerifyCustomer, posVerifiedCustomer, setPosData, posData, handlePOSSubmit, fuels, handlePosChange, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, allReservations, getStatusColor, handleCompleteReservation, handleCancelReservation, monitoringData, message } = props;
+  const {
+    loggedInUser, logout, activeEmpTab, setActiveEmpTab, fetchMonitoring, fetchSchedule,
+    scheduleYear, scheduleMonth, scheduleData, changeScheduleMonth, handleScheduleMonthInput,
+    posCustomerQuery, setPosCustomerQuery, handleVerifyCustomer, posVerifiedCustomer, setPosData,
+    posData, handlePOSSubmit, fuels, handlePosChange, empResDateFilter, setEmpResDateFilter,
+    empResPhoneFilter, setEmpResPhoneFilter, allReservations, getStatusColor,
+    handleCompleteReservation, handleCancelReservation, monitoringData, message,
+  } = props;
 
   const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
   const costPLN = selectedFuel ? (selectedFuel.pricePerLiter * posData.quantity).toFixed(2) : '0.00';
@@ -12,7 +20,7 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
   const canAffordWithPoints = posVerifiedCustomer && posVerifiedCustomer.loyaltyPoints >= costPoints;
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${activeEmpTab === 'grafik' ? 'app-container-wide' : ''}`}>
       <div className="header-bar">
         <h2 style={{ margin: 0 }}>Witaj, {loggedInUser}! (Panel Pracownika) 👨‍🔧</h2>
         <button onClick={logout} className="btn btn-danger">Wyloguj się</button>
@@ -21,6 +29,12 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
       <div className="tabs-container">
         <button onClick={() => setActiveEmpTab('pos')} className={`tab-btn-large ${activeEmpTab === 'pos' ? 'tab-active-primary' : 'tab-inactive'}`}>⛽ Kasa POS</button>
         <button onClick={() => setActiveEmpTab('rezerwacje')} className={`tab-btn-large ${activeEmpTab === 'rezerwacje' ? 'tab-active-primary' : 'tab-inactive'}`}>🧼 Rezerwacje</button>
+        <button
+          onClick={() => { setActiveEmpTab('grafik'); fetchSchedule(); }}
+          className={`tab-btn-large ${activeEmpTab === 'grafik' ? 'tab-active-primary' : 'tab-inactive'}`}
+        >
+          📅 Grafik
+        </button>
         <button onClick={() => { setActiveEmpTab('monitoring'); fetchMonitoring(); }} className={`tab-btn-large ${activeEmpTab === 'monitoring' ? 'tab-active-primary' : 'tab-inactive'}`}>📡 Monitoring</button>
       </div>
 
@@ -112,6 +126,20 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {activeEmpTab === 'grafik' && (
+        <div className="card schedule-card text-left">
+          <ScheduleCalendar
+            readOnly
+            title="Grafik pracy (podgląd) 📅"
+            scheduleYear={scheduleYear}
+            scheduleMonth={scheduleMonth}
+            scheduleData={scheduleData}
+            changeScheduleMonth={changeScheduleMonth}
+            onMonthInput={handleScheduleMonthInput}
+          />
         </div>
       )}
 
