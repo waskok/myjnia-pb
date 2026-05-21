@@ -64,11 +64,12 @@ model IndividualCustomer {
 }
 
 model CompanyCustomer {
-  id         Int      @id @default(autoincrement())
-  customerId Int      @unique
-  nip        String
-  regon      String
-  customer   Customer @relation(fields: [customerId], references: [id])
+  id          Int      @id @default(autoincrement())
+  customerId  Int      @unique
+  companyName String
+  nip         String
+  regon       String
+  customer    Customer @relation(fields: [customerId], references: [id])
 }
 
 model LoyaltyProgram {

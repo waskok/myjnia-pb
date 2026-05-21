@@ -10,9 +10,48 @@ const router = Router();
 // ==========================================
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, lastName, address, phone, email, password } = req.body;
-    if (!firstName || !lastName || !address || !phone || !email || !password) {
-      return res.status(400).json({ error: 'Wszystkie pola są wymagane!' });
+    const {
+      accountType,
+      firstName,
+      lastName,
+      companyName,
+      address,
+      phone,
+      email,
+      password,
+      pesel,
+      nip,
+      regon,
+    } = req.body as {
+      accountType?: string;
+      firstName?: string;
+      lastName?: string;
+      companyName?: string;
+      address?: string;
+      phone?: string;
+      email?: string;
+      password?: string;
+      pesel?: string;
+      nip?: string;
+      regon?: string;
+    };
+
+    if (!accountType || !address || !phone || !email || !password) {
+      return res.status(400).json({ error: 'Wypełnij wszystkie wymagane pola!' });
+    }
+
+    if (accountType !== 'individual' && accountType !== 'company') {
+      return res.status(400).json({ error: 'Nieprawidłowy typ konta.' });
+    }
+
+    if (accountType === 'individual') {
+      if (!firstName || !lastName || !pesel) {
+        return res.status(400).json({ error: 'Dla osoby fizycznej podaj imię, nazwisko i PESEL.' });
+      }
+    } else {
+      if (!companyName || !nip || !regon) {
+        return res.status(400).json({ error: 'Dla firmy podaj nazwę firmy, NIP i REGON.' });
+      }
     }
 
     const existingUser = await prisma.customer.findUnique({ where: { email } });
@@ -21,8 +60,43 @@ router.post('/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newCustomer = await prisma.customer.create({
-      data: { firstName, lastName, address, phone, email, password: hashedPassword, registered: true }
+
+    const customerFirstName =
+      accountType === 'company' ? companyName!.trim() : firstName!.trim();
+    const customerLastName =
+      accountType === 'company' ? '—' : lastName!.trim();
+
+    await prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.create({
+        data: {
+          firstName: customerFirstName,
+          lastName: customerLastName,
+          address: address.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          password: hashedPassword,
+          registered: true,
+        },
+      });
+
+      if (accountType === 'individual') {
+        await tx.individualCustomer.create({
+          data: {
+            customerId: customer.id,
+            pesel: pesel!.trim(),
+            nip: nip?.trim() || null,
+          },
+        });
+      } else {
+        await tx.companyCustomer.create({
+          data: {
+            customerId: customer.id,
+            companyName: companyName!.trim(),
+            nip: nip!.trim(),
+            regon: regon!.trim(),
+          },
+        });
+      }
     });
 
     res.status(201).json({ message: 'Rejestracja zakończona sukcesem!' });

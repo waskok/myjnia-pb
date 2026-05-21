@@ -14,7 +14,19 @@ export const useAppLogic = () => {
   const [empResPhoneFilter, setEmpResPhoneFilter] = useState('');
 
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ firstName: '', lastName: '', address: '', phone: '', email: '', password: '' });
+  const [formData, setFormData] = useState({
+    accountType: 'individual' as 'individual' | 'company',
+    firstName: '',
+    lastName: '',
+    companyName: '',
+    address: '',
+    phone: '',
+    email: '',
+    password: '',
+    pesel: '',
+    nip: '',
+    regon: '',
+  });
   const [services, setServices] = useState<WashService[]>([]);
   const [selectedService, setSelectedService] = useState('');
   const [reservationDate, setReservationDate] = useState('');
@@ -65,7 +77,8 @@ export const useAppLogic = () => {
     return '#334155';
   };
 
-  const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   const handleStaffChange = (e: React.ChangeEvent<HTMLInputElement>) => setStaffData({ ...staffData, [e.target.name]: e.target.value });
   const handleDeliveryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setNewDelivery({ ...newDelivery, [e.target.name]: e.target.value });
   const handlePosChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -239,7 +252,22 @@ export const useAppLogic = () => {
             setActiveEmpTab('pos');
             fetchFuels(); fetchAllReservations(data.token); 
           } else { fetchCustomerData(data.token); }
-        } else { setIsLogin(true); setFormData({ ...formData, password: '' }); }
+        } else {
+          setIsLogin(true);
+          setFormData({
+            accountType: 'individual',
+            firstName: '',
+            lastName: '',
+            companyName: '',
+            address: '',
+            phone: '',
+            email: formData.email,
+            password: '',
+            pesel: '',
+            nip: '',
+            regon: '',
+          });
+        }
       } else setMessage('❌ ' + data.error);
     } catch (e) { console.error(e); setMessage('❌ Błąd połączenia z serwerem!'); }
   };

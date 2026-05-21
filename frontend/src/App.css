@@ -35,6 +35,10 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
 }
 
+.login-container-register {
+  max-width: 440px;
+}
+
 .card { margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 10px; }
 .card-light { background-color: #f8f9fa; border-color: #dee2e6; }
 .card-gray { background-color: #e9ecef; border-color: #ced4da; }
