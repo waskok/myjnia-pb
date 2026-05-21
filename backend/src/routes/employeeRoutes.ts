@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../prismaClient.js';
+import { formatDateOnly, getMonthRange } from '../scheduleUtils.js';
 
 interface TokenPayload {
   id: number;
@@ -128,6 +129,58 @@ router.post('/transactions/fuel', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd podczas transakcji.' });
+  }
+});
+
+// ==========================================
+// MODUŁ GRAFIKU PRACOWNIKÓW (ODCZYT)
+// ==========================================
+router.get('/employee/schedule', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'employee') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const employee = await prisma.employee.findUnique({
+      where: { id: decoded.id },
+      select: { ownerId: true }
+    });
+    if (!employee) return res.status(404).json({ error: 'Nie znaleziono pracownika.' });
+
+    const year = Number(req.query.year);
+    const month = Number(req.query.month);
+    const range = getMonthRange(year, month);
+    if (!range) {
+      return res.status(400).json({ error: 'Podaj poprawne parametry year i month (1–12).' });
+    }
+
+    const schedules = await prisma.workSchedule.findMany({
+      where: {
+        ownerId: employee.ownerId,
+        date: { gte: range.start, lte: range.end }
+      },
+      include: {
+        employee: { select: { id: true, firstName: true, lastName: true, role: true } }
+      },
+      orderBy: [{ date: 'asc' }, { shift: 'asc' }]
+    });
+
+    res.json({
+      year,
+      month,
+      schedules: schedules.map((entry) => ({
+        id: entry.id,
+        date: formatDateOnly(entry.date),
+        startTime: entry.shift,
+        employeeId: entry.employeeId,
+        employee: entry.employee
+      }))
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd pobierania grafiku.' });
   }
 });
 

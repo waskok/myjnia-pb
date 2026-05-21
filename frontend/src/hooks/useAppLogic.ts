@@ -7,7 +7,7 @@ export const useAppLogic = () => {
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
   
   const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring' | 'raporty' | 'grafik'>('paliwa');
-  const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring'>('pos');
+  const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring' | 'grafik'>('pos');
   const [activeCustTab, setActiveCustTab] = useState<ActiveCustTab>('book');
 
   const [empResDateFilter, setEmpResDateFilter] = useState('');
@@ -98,9 +98,11 @@ export const useAppLogic = () => {
   const fetchSchedule = async (year = scheduleYear, month = scheduleMonth) => {
     const token = localStorage.getItem('token');
     if (!token) return;
+    const schedulePath =
+      userRole === 'employee' ? '/api/employee/schedule' : '/api/owner/schedule';
     try {
       const res = await fetch(
-        `http://localhost:5000/api/owner/schedule?year=${year}&month=${month}`,
+        `http://localhost:5000${schedulePath}?year=${year}&month=${month}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const data = await res.json();
