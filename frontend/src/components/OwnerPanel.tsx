@@ -6,43 +6,25 @@ import type { ReportPeriodType } from '../types';
 
 export const OwnerPanel: React.FC<AppLogic> = (props) => {
   const {
-    loggedInUser, logout, activeTab, setActiveTab, reportPeriod, setReportPeriod, reportDateStr,
+    activeTab, reportPeriod, setReportPeriod, reportDateStr,
     handleDateChange, fetchReports, reportData, fuels, newPrice, setNewPrice, handleUpdatePrice,
     newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery,
     newEmployee, setNewEmployee, handleAddEmployee, employees, handleDeleteEmployee, customers,
-    fetchMonitoring, monitoringData, fetchSchedule, scheduleYear, scheduleMonth, scheduleData,
+    fetchMonitoring, monitoringData, scheduleYear, scheduleMonth, scheduleData,
     selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime,
     changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule,
     handleDeleteScheduleEntry, setSelectedScheduleDates,
   } = props;
 
   return (
-    <div className={`app-container ${activeTab === 'grafik' ? 'app-container-wide' : ''}`}>
-      <div className="header-bar">
-        <h2 style={{ margin: 0 }}>Witaj, {loggedInUser}! (Panel Właściciela) 💼</h2>
-        <button onClick={logout} className="btn btn-danger">Wyloguj się</button>
-      </div>
-      
-      <div className="tabs-container">
-        <button onClick={() => setActiveTab('paliwa')} className={`tab-btn-large ${activeTab === 'paliwa' ? 'tab-active-primary' : 'tab-inactive'}`}>⛽ Paliwa</button>
-        <button onClick={() => setActiveTab('pracownicy')} className={`tab-btn-large ${activeTab === 'pracownicy' ? 'tab-active-primary' : 'tab-inactive'}`}>👨‍🔧 Pracownicy</button>
-        <button
-          onClick={() => { setActiveTab('grafik'); fetchSchedule(); }}
-          className={`tab-btn-large ${activeTab === 'grafik' ? 'tab-active-primary' : 'tab-inactive'}`}
-        >
-          📅 Grafik
-        </button>
-        <button onClick={() => setActiveTab('klienci')} className={`tab-btn-large ${activeTab === 'klienci' ? 'tab-active-primary' : 'tab-inactive'}`}>👥 Klienci</button>
-        <button onClick={() => { setActiveTab('monitoring'); fetchMonitoring(); }} className={`tab-btn-large ${activeTab === 'monitoring' ? 'tab-active-primary' : 'tab-inactive'}`}>📡 Monitoring</button>
-        <button onClick={() => { setActiveTab('raporty'); fetchReports(); }} className={`tab-btn-large ${activeTab === 'raporty' ? 'tab-active-primary' : 'tab-inactive'}`}>📊 Raporty</button>
-      </div>
+    <div className="panel-content">
 
       {activeTab === 'raporty' && (
         <div className="card">
           <div className="flex-space-between mb-20" style={{ alignItems: 'center' }}>
-            <h3 style={{ margin: 0 }}>Raporty Sprzedaży 📊</h3>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <label style={{ fontWeight: 'bold' }}>Okres:</label>
+            <h3 style={{ margin: 0 }}>Raporty sprzedaży</h3>
+            <div className="form-inline">
+              <label className="form-label">Okres:</label>
               <select className="select-field" value={reportPeriod} onChange={e => { const p = e.target.value as ReportPeriodType; setReportPeriod(p); fetchReports(p, reportDateStr); }}>
                 <option value="all">Cały czas</option><option value="daily">Dzienny</option><option value="monthly">Miesięczny</option><option value="yearly">Roczny</option>
               </select>
@@ -67,22 +49,21 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
             </div>
           </div>
 
-          <h3 className="mt-20">Historia Transakcji {reportPeriod === 'all' && '(15 najnowszych)'}</h3>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead><tr><th>Data</th><th>Klient</th><th>Kwota</th><th>Płatność</th><th>Kasjer</th></tr></thead>
-              <tbody>
-                {reportData?.transactions.map(t => (
-                  <tr key={t.id}>
-                    <td>{new Date(t.date).toLocaleString()}</td>
-                    <td>{t.customer ? `${t.customer.firstName} ${t.customer.lastName}` : <span className="text-muted">Niezarejestrowany</span>}</td>
-                    <td style={{ fontWeight: 'bold' }}>{t.totalAmount.toFixed(2)} zł</td>
-                    <td>{t.paymentMethod}</td>
-                    <td>{t.employee.firstName}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <h3 className="mt-20">Historia transakcji {reportPeriod === 'all' && '(15 najnowszych)'}</h3>
+          <div className="list-grid">
+            {reportData?.transactions.map(t => (
+              <article key={t.id} className="list-item card-like">
+                <div>
+                  <p className="item-title">{new Date(t.date).toLocaleString()}</p>
+                  <p className="item-meta">Klient: {t.customer ? `${t.customer.firstName} ${t.customer.lastName}` : 'Niezarejestrowany'}</p>
+                  <p className="item-meta">Kasjer: {t.employee.firstName}</p>
+                </div>
+                <div className="summary-values">
+                  <strong>{t.totalAmount.toFixed(2)} zł</strong>
+                  <span>{t.paymentMethod}</span>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       )}
@@ -90,27 +71,26 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
       {activeTab === 'paliwa' && (
         <>
           <div className="card">
-            <h3>Zarządzanie Cennikiem i Magazynem 📈</h3>
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead><tr><th>Paliwo</th><th>Stan Zbiornika</th><th>Aktualna Cena</th><th>Nowa Cena</th><th>Akcja</th></tr></thead>
-                <tbody>
-                  {fuels.map(f => (
-                    <tr key={f.id}>
-                      <td><strong>{f.type}</strong></td>
-                      <td style={{ color: f.tankLevel < 1000 ? '#ef4444' : 'inherit', fontWeight: f.tankLevel < 1000 ? 'bold' : 'normal' }}>{f.tankLevel} / {f.maxLevel} L</td>
-                      <td>{f.pricePerLiter} zł/L</td>
-                      <td><input type="number" step="0.01" className="input-field w-full" value={newPrice[f.id] || ''} onChange={(e) => setNewPrice({ ...newPrice, [f.id]: parseFloat(e.target.value) })} /></td>
-                      <td><button onClick={() => handleUpdatePrice(f.id)} className="btn btn-success">Zmień</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <h3>📦 Zarządzanie cennikiem i magazynem</h3>
+            <div className="list-grid">
+              {fuels.map(f => (
+                <article key={f.id} className="list-item card-like">
+                  <div>
+                    <p className="item-title">{f.type}</p>
+                    <p className="item-meta">Stan: <span className={f.tankLevel < 1000 ? 'text-danger' : ''}>{f.tankLevel} / {f.maxLevel} L</span></p>
+                    <p className="item-meta">Aktualna cena: {f.pricePerLiter} zł/L</p>
+                  </div>
+                  <div className="row-actions">
+                    <input type="number" step="0.01" className="input-field" value={newPrice[f.id] || ''} onChange={(e) => setNewPrice({ ...newPrice, [f.id]: parseFloat(e.target.value) })} />
+                    <button onClick={() => handleUpdatePrice(f.id)} className="btn btn-success">Zmień</button>
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
 
           <div className="card">
-            <h3>Zarządzanie Dostawami 🚚</h3>
+            <h3>🚚 Zarządzanie dostawami</h3>
             <form onSubmit={handleOrderDelivery} className="flex-row mb-20" style={{ alignItems: 'flex-end' }}>
               <div style={{ flex: 1 }}><label>Paliwo</label><select name="fuelId" className="select-field w-full" value={newDelivery.fuelId} onChange={handleDeliveryChange} required><option value="" disabled>Paliwo</option>{fuels.map(f => <option key={f.id} value={f.id}>{f.type}</option>)}</select></div>
               <div style={{ flex: 1 }}><label>Ilość (L)</label><input type="number" name="quantity" className="input-field w-full" value={newDelivery.quantity} onChange={handleDeliveryChange} required /></div>
@@ -119,13 +99,14 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
               <button type="submit" className="btn btn-warning">Zleć dostawę</button>
             </form>
             
-            <ul className="list-unstyled">
+            <ul className="list-unstyled list-grid">
               {deliveries.map(d => (
-                <li key={d.id} className="list-item">
+                <li key={d.id} className="list-item card-like">
                   <div>
-                    <strong style={{ fontSize: '16px' }}>{d.fuel.type}</strong> - {d.quantity} L (Dostawca: {d.supplier})<br/> 
-                    <span className="text-muted">Planowana:</span> {new Date(d.deliveryDate).toLocaleString()} <br/>
-                    <span className="text-muted">Status:</span> <span style={{ fontWeight: 'bold', color: d.status === 'Dostarczona' ? '#10b981' : '#f59e0b' }}>{d.status}</span>
+                    <p className="item-title">{d.fuel.type} - {d.quantity} L</p>
+                    <p className="item-meta">Dostawca: {d.supplier}</p>
+                    <p className="item-meta">Planowana: {new Date(d.deliveryDate).toLocaleString()}</p>
+                    <span className={`status-badge ${d.status === 'Dostarczona' ? 'badge-success' : 'badge-warning'}`}>{d.status}</span>
                   </div>
                   {d.status !== 'Dostarczona' && <button onClick={() => handleCompleteDelivery(d.id)} className="btn btn-primary">Odbierz dostawę</button>}
                 </li>
@@ -151,17 +132,18 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
           
           <div className="card">
             <h3>Lista Pracowników</h3>
-            <table className="data-table">
-              <thead><tr><th>Imię i Nazwisko</th><th>Rola</th><th>Login</th><th>Akcja</th></tr></thead>
-              <tbody>
-                {employees.map(emp => (
-                  <tr key={emp.id}>
-                    <td>{emp.firstName} {emp.lastName}</td><td>{emp.role}</td><td>{emp.login}</td>
-                    <td><button onClick={() => handleDeleteEmployee(emp.id)} className="btn btn-danger">Usuń</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="list-grid">
+              {employees.map(emp => (
+                <article key={emp.id} className="list-item card-like">
+                  <div>
+                    <p className="item-title">{emp.firstName} {emp.lastName}</p>
+                    <p className="item-meta">Rola: {emp.role}</p>
+                    <p className="item-meta">Login: {emp.login}</p>
+                  </div>
+                  <button onClick={() => handleDeleteEmployee(emp.id)} className="btn btn-danger">Usuń</button>
+                </article>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -169,18 +151,18 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
       {activeTab === 'klienci' && (
         <div className="card">
           <h3>Baza Zarejestrowanych Klientów</h3>
-          <table className="data-table">
-            <thead><tr><th>Klient</th><th>E-mail / Tel</th><th>Punkty</th></tr></thead>
-            <tbody>
-              {customers.map(c => (
-                <tr key={c.id}>
-                  <td>{c.firstName} {c.lastName}</td>
-                  <td>{c.email}<br/><small className="text-muted">{c.phone}</small></td>
-                  <td><strong style={{ color: '#10b981', fontSize: '16px' }}>{c.loyaltyPoints} pkt</strong></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="list-grid">
+            {customers.map(c => (
+              <article key={c.id} className="list-item card-like">
+                <div>
+                  <p className="item-title">{c.firstName} {c.lastName}</p>
+                  <p className="item-meta">{c.email}</p>
+                  <p className="item-meta">{c.phone}</p>
+                </div>
+                <span className="status-badge badge-success">{c.loyaltyPoints} pkt</span>
+              </article>
+            ))}
+          </div>
         </div>
       )}
 
