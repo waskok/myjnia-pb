@@ -16,7 +16,8 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
   const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
   const costPLN = selectedFuel ? (selectedFuel.pricePerLiter * posData.quantity).toFixed(2) : '0.00';
   const pointsCostPerLiter = selectedFuel?.type === 'LPG' ? 50 : 100;
-  const costPoints = Math.floor(posData.quantity) * pointsCostPerLiter;
+  const liters = Number(posData.quantity) || 0;
+  const costPoints = Math.floor(liters * pointsCostPerLiter);
   const canAffordWithPoints = posVerifiedCustomer && posVerifiedCustomer.loyaltyPoints >= costPoints;
   const invoiceNeedsVerification = posData.issueInvoice && !posVerifiedCustomer;
   const canViewPos = employeeJobRole === 'Kasjer';

@@ -9,8 +9,9 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
   const {
     activeTab, reportPeriod, setReportPeriod, reportDateStr,
     handleDateChange, fetchReports, reportData, fuels, newPrice, setNewPrice, handleUpdatePrice,
+    loyaltyConfig, handleLoyaltyConfigChange, handleSaveLoyaltyConfig,
     newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery,
-    newEmployee, setNewEmployee, handleAddEmployee, employees, handleDeleteEmployee, customers,
+    newEmployee, setNewEmployee, handleAddEmployee, employees, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleDeleteEmployee, customers,
     fetchMonitoring, monitoringData, scheduleYear, scheduleMonth, scheduleData,
     selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime,
     scheduleEndTime, setScheduleEndTime,
@@ -160,10 +161,10 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
         </div>
       )}
 
-      {activeTab === 'paliwa' && (
+      {activeTab === 'cennik' && (
         <>
           <div className="card">
-            <h3>📦 Zarządzanie cennikiem i magazynem</h3>
+            <h3>Zarządzanie cenami paliw</h3>
             <div className="list-grid">
               {fuels.map(f => (
                 <article key={f.id} className="list-item card-like">
@@ -182,28 +183,14 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
           </div>
 
           <div className="card">
-            <h3>🚚 Zarządzanie dostawami</h3>
-            <form onSubmit={handleOrderDelivery} className="flex-row mb-20" style={{ alignItems: 'flex-end' }}>
-              <div style={{ flex: 1 }}><label>Paliwo</label><select name="fuelId" className="select-field w-full" value={newDelivery.fuelId} onChange={handleDeliveryChange} required><option value="" disabled>Paliwo</option>{fuels.map(f => <option key={f.id} value={f.id}>{f.type}</option>)}</select></div>
-              <div style={{ flex: 1 }}><label>Ilość (L)</label><input type="number" name="quantity" className="input-field w-full" value={newDelivery.quantity} onChange={handleDeliveryChange} required /></div>
-              <div style={{ flex: 1 }}><label>Dostawca</label><input type="text" name="supplier" className="input-field w-full" value={newDelivery.supplier} onChange={handleDeliveryChange} required /></div>
-              <div style={{ flex: 1 }}><label>Data</label><input type="datetime-local" name="deliveryDate" className="input-field w-full" value={newDelivery.deliveryDate} onChange={handleDeliveryChange} required /></div>
-              <button type="submit" className="btn btn-warning">Zleć dostawę</button>
-            </form>
-            
-            <ul className="list-unstyled list-grid">
-              {deliveries.map(d => (
-                <li key={d.id} className="list-item card-like">
-                  <div>
-                    <p className="item-title">{d.fuel.type} - {d.quantity} L</p>
-                    <p className="item-meta">Dostawca: {d.supplier}</p>
-                    <p className="item-meta">Planowana: {new Date(d.deliveryDate).toLocaleString()}</p>
-                    <span className={`status-badge ${d.status === 'Dostarczona' ? 'badge-success' : 'badge-warning'}`}>{d.status}</span>
-                  </div>
-                  {d.status !== 'Dostarczona' && <button onClick={() => handleCompleteDelivery(d.id)} className="btn btn-primary">Odbierz dostawę</button>}
-                </li>
-              ))}
-            </ul>
+            <h3>Stawki punktów za litr</h3>
+            <div className="grid-responsive mb-20">
+              <div><label>E95 (pkt/L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerE95} onChange={(e) => handleLoyaltyConfigChange('pointsPerE95', Number(e.target.value))} /></div>
+              <div><label>E98 (pkt/L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerE98} onChange={(e) => handleLoyaltyConfigChange('pointsPerE98', Number(e.target.value))} /></div>
+              <div><label>Diesel (pkt/L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerDiesel} onChange={(e) => handleLoyaltyConfigChange('pointsPerDiesel', Number(e.target.value))} /></div>
+              <div><label>LPG (pkt/L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerLpg} onChange={(e) => handleLoyaltyConfigChange('pointsPerLpg', Number(e.target.value))} /></div>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={handleSaveLoyaltyConfig}>Zapisz stawki punktów</button>
           </div>
         </>
       )}
@@ -232,10 +219,54 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
                     <p className="item-meta">Rola: {emp.role}</p>
                     <p className="item-meta">Login: {emp.login}</p>
                   </div>
-                  <button onClick={() => handleDeleteEmployee(emp.id)} className="btn btn-danger">Usuń</button>
+                  <div className="row-actions">
+                    <button onClick={() => handleChangeEmployeeLogin(emp.id, emp.login)} className="btn btn-light">Zmień login</button>
+                    <button onClick={() => handleChangeEmployeePassword(emp.id)} className="btn btn-warning">Zmień hasło</button>
+                    <button onClick={() => handleDeleteEmployee(emp.id)} className="btn btn-danger">Usuń pracownika</button>
+                  </div>
                 </article>
               ))}
             </div>
+          </div>
+
+        </>
+      )}
+
+      {activeTab === 'dostawy' && (
+        <>
+          <div className="card">
+            <h3>Zarządzanie dostawami</h3>
+            <form onSubmit={handleOrderDelivery} className="flex-row mb-20" style={{ alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}><label>Paliwo</label><select name="fuelId" className="select-field w-full" value={newDelivery.fuelId} onChange={handleDeliveryChange} required><option value="" disabled>Paliwo</option>{fuels.map(f => <option key={f.id} value={f.id}>{f.type}</option>)}</select></div>
+              <div style={{ flex: 1 }}><label>Ilość (L)</label><input type="number" name="quantity" className="input-field w-full" value={newDelivery.quantity} onChange={handleDeliveryChange} required /></div>
+              <div style={{ flex: 1 }}>
+                <label>Dostawca</label>
+                <select name="supplier" className="select-field w-full" value={newDelivery.supplier} onChange={handleDeliveryChange} required>
+                  <option value="" disabled>Wybierz dostawcę</option>
+                  <option value="ORLEN S.A.">ORLEN S.A.</option>
+                  <option value="Aramco Fuels Poland">Aramco Fuels Poland</option>
+                  <option value="Unimot">Unimot</option>
+                  <option value="Transoil">Transoil</option>
+                  <option value="Poloil">Poloil</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}><label>Data</label><input type="datetime-local" name="deliveryDate" className="input-field w-full" value={newDelivery.deliveryDate} onChange={handleDeliveryChange} required /></div>
+              <button type="submit" className="btn btn-warning">Zleć dostawę</button>
+            </form>
+            
+            <ul className="list-unstyled list-grid">
+              {deliveries.map(d => (
+                <li key={d.id} className="list-item card-like">
+                  <div>
+                    <p className="item-title">{d.fuel.type} - {d.quantity} L</p>
+                    <p className="item-meta">Dostawca: {d.supplier}</p>
+                    <p className="item-meta">Planowana: {new Date(d.deliveryDate).toLocaleString()}</p>
+                    <span className={`status-badge ${d.status === 'Dostarczona' ? 'badge-success' : 'badge-warning'}`}>{d.status}</span>
+                  </div>
+                  {d.status !== 'Dostarczona' && <button onClick={() => handleCompleteDelivery(d.id)} className="btn btn-primary">Odbierz dostawę</button>}
+                </li>
+              ))}
+            </ul>
           </div>
         </>
       )}

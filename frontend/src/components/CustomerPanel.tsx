@@ -15,7 +15,7 @@ export const CustomerPanel: React.FC<AppLogic> = (props) => {
   return (
     <div className="panel-content">
       <div className="panel-meta">
-        <div className="points-badge">💧 Punkty lojalnościowe: <span>{loyaltyPoints}</span></div>
+        <div className="points-badge">Punkty lojalnościowe: <span>{loyaltyPoints}</span></div>
       </div>
 
       {activeCustTab === 'book' && (

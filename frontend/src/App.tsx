@@ -125,7 +125,8 @@ function App() {
 
   const ownerButtons = (
     <>
-      <button type="button" className={`tab-btn-large ${appLogic.activeTab === 'paliwa' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveTab('paliwa')}>Paliwa</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeTab === 'cennik' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveTab('cennik')}>Cennik</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeTab === 'dostawy' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveTab('dostawy')}>Dostawy</button>
       <button type="button" className={`tab-btn-large ${appLogic.activeTab === 'pracownicy' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveTab('pracownicy')}>Pracownicy</button>
       <button
         type="button"

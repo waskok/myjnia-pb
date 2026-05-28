@@ -15,14 +15,28 @@ interface PointsCalculationItem {
   quantity: number;
 }
 
+interface LoyaltyRates {
+  pointsPerE95: number;
+  pointsPerE98: number;
+  pointsPerDiesel: number;
+  pointsPerLpg: number;
+}
+
 const router = Router();
 
-function calculatePointsUsed(items: PointsCalculationItem[]): number {
+function getPointsRateForProduct(product: string, rates: LoyaltyRates): number {
+  const normalized = product.toUpperCase();
+  if (normalized.includes('LPG')) return rates.pointsPerLpg;
+  if (normalized.includes('98')) return rates.pointsPerE98;
+  if (normalized.includes('DIESEL') || normalized.includes('ON')) return rates.pointsPerDiesel;
+  return rates.pointsPerE95;
+}
+
+function calculatePointsUsed(items: PointsCalculationItem[], rates: LoyaltyRates): number {
   return items.reduce((sum, item) => {
-    const qty = Math.floor(Number(item.quantity) || 0);
+    const qty = Number(item.quantity) || 0;
     if (qty <= 0) return sum;
-    const isLpg = item.product.toUpperCase().includes('LPG');
-    return sum + qty * (isLpg ? 50 : 100);
+    return sum + Math.floor(qty * getPointsRateForProduct(item.product, rates));
   }, 0);
 }
 
@@ -102,6 +116,74 @@ router.delete('/owner/employees/:id', async (req, res) => {
   }
 });
 
+router.patch('/owner/employees/:id/login', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const employeeId = Number(req.params.id);
+    const { login } = req.body as { login?: string };
+    const normalizedLogin = (login || '').trim();
+    if (!employeeId || Number.isNaN(employeeId)) return res.status(400).json({ error: 'Nieprawidłowe ID pracownika.' });
+    if (!normalizedLogin) return res.status(400).json({ error: 'Login nie może być pusty.' });
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, ownerId: decoded.id },
+      select: { id: true }
+    });
+    if (!employee) return res.status(404).json({ error: 'Nie znaleziono pracownika przypisanego do tego właściciela.' });
+
+    const existing = await prisma.employee.findUnique({ where: { login: normalizedLogin } });
+    if (existing && existing.id !== employeeId) {
+      return res.status(409).json({ error: 'Ten login jest już zajęty.' });
+    }
+
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: { login: normalizedLogin }
+    });
+
+    res.json({ message: 'Login pracownika został zaktualizowany.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd zmiany loginu pracownika.' });
+  }
+});
+
+router.patch('/owner/employees/:id/password', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const employeeId = Number(req.params.id);
+    const { password } = req.body as { password?: string };
+    const normalizedPassword = (password || '').trim();
+    if (!employeeId || Number.isNaN(employeeId)) return res.status(400).json({ error: 'Nieprawidłowe ID pracownika.' });
+    if (normalizedPassword.length < 6) return res.status(400).json({ error: 'Hasło musi mieć minimum 6 znaków.' });
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, ownerId: decoded.id },
+      select: { id: true }
+    });
+    if (!employee) return res.status(404).json({ error: 'Nie znaleziono pracownika przypisanego do tego właściciela.' });
+
+    const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: { password: hashedPassword }
+    });
+
+    res.json({ message: 'Hasło pracownika zostało zaktualizowane.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd zmiany hasła pracownika.' });
+  }
+});
+
 router.get('/owner/customers', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -113,6 +195,87 @@ router.get('/owner/customers', async (req, res) => {
     res.json(customers);
   } catch (error) {
     res.status(500).json({ error: 'Błąd pobierania bazy klientów.' });
+  }
+});
+
+router.get('/owner/loyalty-config', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    let loyalty = await prisma.loyaltyProgram.findFirst();
+    if (!loyalty) {
+      loyalty = await prisma.loyaltyProgram.create({
+        data: {
+          pointsPerE95: 100,
+          pointsPerE98: 100,
+          pointsPerDiesel: 100,
+          pointsPerLpg: 50,
+          pointsPerStandardWash: 10,
+          pointsPerWaxWash: 20
+        }
+      });
+    }
+
+    res.json({
+      pointsPerE95: loyalty.pointsPerE95,
+      pointsPerE98: loyalty.pointsPerE98,
+      pointsPerDiesel: loyalty.pointsPerDiesel,
+      pointsPerLpg: loyalty.pointsPerLpg
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd pobierania konfiguracji punktów.' });
+  }
+});
+
+router.patch('/owner/loyalty-config', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const { pointsPerE95, pointsPerE98, pointsPerDiesel, pointsPerLpg } = req.body as Partial<LoyaltyRates>;
+    const normalized = {
+      pointsPerE95: Math.floor(Number(pointsPerE95)),
+      pointsPerE98: Math.floor(Number(pointsPerE98)),
+      pointsPerDiesel: Math.floor(Number(pointsPerDiesel)),
+      pointsPerLpg: Math.floor(Number(pointsPerLpg))
+    };
+
+    if (Object.values(normalized).some((v) => !Number.isFinite(v) || v < 0)) {
+      return res.status(400).json({ error: 'Stawki punktów muszą być nieujemnymi liczbami całkowitymi.' });
+    }
+
+    const existing = await prisma.loyaltyProgram.findFirst();
+    const loyalty = existing
+      ? await prisma.loyaltyProgram.update({
+          where: { id: existing.id },
+          data: normalized
+        })
+      : await prisma.loyaltyProgram.create({
+          data: {
+            ...normalized,
+            pointsPerStandardWash: 10,
+            pointsPerWaxWash: 20
+          }
+        });
+
+    res.json({
+      message: 'Zaktualizowano stawki punktów.',
+      pointsPerE95: loyalty.pointsPerE95,
+      pointsPerE98: loyalty.pointsPerE98,
+      pointsPerDiesel: loyalty.pointsPerDiesel,
+      pointsPerLpg: loyalty.pointsPerLpg
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd aktualizacji stawek punktów.' });
   }
 });
 
@@ -188,6 +351,13 @@ router.get('/owner/reports', async (req, res) => {
         items: { select: { product: true, quantity: true } }
       }
     });
+    const loyalty = await prisma.loyaltyProgram.findFirst();
+    const loyaltyRates: LoyaltyRates = {
+      pointsPerE95: loyalty?.pointsPerE95 ?? 100,
+      pointsPerE98: loyalty?.pointsPerE98 ?? 100,
+      pointsPerDiesel: loyalty?.pointsPerDiesel ?? 100,
+      pointsPerLpg: loyalty?.pointsPerLpg ?? 50
+    };
 
     res.json({
       totalRevenue: revenueStats._sum.totalAmount || 0,
@@ -195,7 +365,7 @@ router.get('/owner/reports', async (req, res) => {
       transactions: recentTransactions.map((transaction) => {
         const pointsUsed =
           transaction.paymentMethod === 'Punkty'
-            ? calculatePointsUsed(transaction.items)
+            ? calculatePointsUsed(transaction.items, loyaltyRates)
             : 0;
 
         return {
