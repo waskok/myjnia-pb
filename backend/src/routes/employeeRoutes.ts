@@ -10,13 +10,69 @@ interface TokenPayload {
 }
 
 const router = Router();
+const SHIFT_RANGE_REGEX = /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/;
+
+interface LoyaltyRates {
+  pointsPerE95: number;
+  pointsPerE98: number;
+  pointsPerDiesel: number;
+  pointsPerLpg: number;
+}
+
+function resolveFuelPointsRate(fuelType: string, rates: LoyaltyRates): number {
+  const type = fuelType.toUpperCase();
+  if (type.includes('LPG')) return rates.pointsPerLpg;
+  if (type.includes('98')) return rates.pointsPerE98;
+  if (type.includes('DIESEL') || type.includes('ON')) return rates.pointsPerDiesel;
+  return rates.pointsPerE95;
+}
+
+interface InvoicePayload {
+  number: string;
+  issueDate: string;
+  amount: number;
+  paymentMethod: string;
+  quantity: number;
+  fuelType: string;
+  unitPrice: number;
+  buyer: {
+    name: string;
+    address: string;
+    email: string;
+    phone: string;
+    type: 'individual' | 'company';
+    identifiers: {
+      pesel?: string;
+      nip?: string;
+      regon?: string;
+    };
+  };
+}
+
+function buildInvoiceIdentifiers(params: { pesel?: string | null; nip?: string | null; regon?: string | null }) {
+  const identifiers: { pesel?: string; nip?: string; regon?: string } = {};
+  if (params.pesel) identifiers.pesel = params.pesel;
+  if (params.nip) identifiers.nip = params.nip;
+  if (params.regon) identifiers.regon = params.regon;
+  return identifiers;
+}
+
+function parseShiftRange(shift: string): { startTime: string; endTime: string } {
+  if (SHIFT_RANGE_REGEX.test(shift)) {
+    const [startTime = shift, endTime = shift] = shift.split('-');
+    return { startTime, endTime };
+  }
+  return { startTime: shift, endTime: shift };
+}
 
 // ==========================================
 // MODUŁ KASJERA (POS) I SPRZEDAŻY
 // ==========================================
 router.get('/fuels', async (req, res) => {
   try {
-    const fuels = await prisma.fuel.findMany();
+    const fuels = await prisma.fuel.findMany({
+      orderBy: { id: 'asc' }
+    });
     res.json(fuels);
   } catch (error) {
     res.status(500).json({ error: 'Błąd pobierania paliw' });
@@ -62,10 +118,14 @@ router.post('/transactions/fuel', async (req, res) => {
 
     const { fuelId, quantity, customerEmail, paymentMethod, issueInvoice } = req.body;
     if (!fuelId || !quantity || !paymentMethod) return res.status(400).json({ error: 'Brakujące dane transakcji!' });
+    const liters = Number(quantity);
+    if (!Number.isFinite(liters) || liters <= 0) {
+      return res.status(400).json({ error: 'Podaj poprawną ilość litrów.' });
+    }
 
     const fuel = await prisma.fuel.findUnique({ where: { id: Number(fuelId) } });
     if (!fuel) return res.status(404).json({ error: 'Paliwo nie znalezione!' });
-    if (fuel.tankLevel < quantity) return res.status(400).json({ error: 'Brak wystarczającej ilości paliwa w zbiorniku!' });
+    if (fuel.tankLevel < liters) return res.status(400).json({ error: 'Brak wystarczającej ilości paliwa w zbiorniku!' });
 
     let customer = null;
     if (customerEmail) {
@@ -73,13 +133,21 @@ router.post('/transactions/fuel', async (req, res) => {
       if (!customer) return res.status(404).json({ error: 'Nie znaleziono klienta o podanym e-mailu!' });
     }
 
-    let totalAmount = fuel.pricePerLiter * quantity;
+    let totalAmount = fuel.pricePerLiter * liters;
     let pointsEarned = 0;
     let pointsDeducted = 0;
+    const loyalty = await prisma.loyaltyProgram.findFirst();
+    const loyaltyRates: LoyaltyRates = {
+      pointsPerE95: loyalty?.pointsPerE95 ?? 100,
+      pointsPerE98: loyalty?.pointsPerE98 ?? 100,
+      pointsPerDiesel: loyalty?.pointsPerDiesel ?? 100,
+      pointsPerLpg: loyalty?.pointsPerLpg ?? 50
+    };
+    const pointsRate = resolveFuelPointsRate(fuel.type, loyaltyRates);
 
     if (paymentMethod === 'Punkty') {
         if (!customer) return res.status(400).json({ error: 'Płacenie punktami wymaga podania e-maila zarejestrowanego klienta!' });
-        const pointsNeeded = fuel.type === 'LPG' ? Math.floor(quantity) * 50 : Math.floor(quantity) * 100;
+        const pointsNeeded = Math.floor(liters * pointsRate);
         if (customer.loyaltyPoints < pointsNeeded) {
             return res.status(400).json({ error: `Za mało punktów! Potrzeba ${pointsNeeded} pkt, klient ma ${customer.loyaltyPoints} pkt.` });
         }
@@ -88,11 +156,8 @@ router.post('/transactions/fuel', async (req, res) => {
         await prisma.customer.update({ where: { id: customer.id }, data: { loyaltyPoints: { decrement: pointsDeducted } } });
     } else {
         if (customer) {
-          const loyalty = await prisma.loyaltyProgram.findFirst();
-          if (loyalty) {
-            pointsEarned = fuel.type === 'LPG' ? Math.floor(quantity) * loyalty.pointsPerLpg : Math.floor(quantity) * loyalty.pointsPerE95;
-            await prisma.customer.update({ where: { id: customer.id }, data: { loyaltyPoints: { increment: pointsEarned } } });
-          }
+          pointsEarned = Math.floor(liters * pointsRate);
+          await prisma.customer.update({ where: { id: customer.id }, data: { loyaltyPoints: { increment: pointsEarned } } });
         }
     }
 
@@ -104,27 +169,62 @@ router.post('/transactions/fuel', async (req, res) => {
         totalAmount: totalAmount,
         paymentMethod: paymentMethod,
         items: {
-          create: [{ product: `Paliwo ${fuel.type}`, quantity: Number(quantity), unitPrice: fuel.pricePerLiter, value: totalAmount }]
+          create: [{ product: `Paliwo ${fuel.type}`, quantity: liters, unitPrice: fuel.pricePerLiter, value: totalAmount }]
         }
       }
     });
 
-    let documentMsg = ' Drukowanie paragonu...'; 
+    let documentMsg = ' Drukowanie paragonu...';
+    let invoicePayload: InvoicePayload | null = null;
+    if (issueInvoice && !customer) {
+      return res.status(400).json({ error: 'Aby wystawić fakturę, podaj e-mail zarejestrowanego klienta!' });
+    }
+    if (issueInvoice && customer && !customer.registered) {
+      return res.status(400).json({ error: 'Fakturę można wystawić tylko zarejestrowanemu klientowi.' });
+    }
     if (issueInvoice && customer && totalAmount > 0) {
-        await prisma.invoice.create({
-            data: { customerId: customer.id, transactionId: transaction.id, number: `FV/${new Date().getFullYear()}/${transaction.id}`, amount: totalAmount }
-        });
-        documentMsg = ' Wystawiono Fakturę VAT.'; 
-    } else if (issueInvoice && !customer) {
-        return res.status(400).json({ error: 'Aby wystawić fakturę, podaj e-mail zarejestrowanego klienta!' });
+      const invoiceNumber = `FV/${new Date().getFullYear()}/${transaction.id}`;
+      const invoice = await prisma.invoice.create({
+        data: { customerId: customer.id, transactionId: transaction.id, number: invoiceNumber, amount: totalAmount }
+      });
+
+      const [individualData, companyData] = await Promise.all([
+        prisma.individualCustomer.findUnique({ where: { customerId: customer.id } }),
+        prisma.companyCustomer.findUnique({ where: { customerId: customer.id } })
+      ]);
+
+      const identifiersInput: { pesel?: string | null; nip?: string | null; regon?: string | null } = {};
+      if (individualData?.pesel) identifiersInput.pesel = individualData.pesel;
+      if (companyData?.nip || individualData?.nip) identifiersInput.nip = companyData?.nip || individualData?.nip || null;
+      if (companyData?.regon) identifiersInput.regon = companyData.regon;
+
+      invoicePayload = {
+        number: invoice.number,
+        issueDate: invoice.date.toISOString(),
+        amount: totalAmount,
+        paymentMethod,
+        quantity: liters,
+        fuelType: fuel.type,
+        unitPrice: fuel.pricePerLiter,
+        buyer: {
+          name: companyData?.companyName || `${customer.firstName} ${customer.lastName}`,
+          address: customer.address,
+          email: customer.email,
+          phone: customer.phone,
+          type: companyData ? 'company' : 'individual',
+          identifiers: buildInvoiceIdentifiers(identifiersInput)
+        }
+      };
+
+      documentMsg = ' Wystawiono Fakturę VAT.';
     }
 
-    await prisma.fuel.update({ where: { id: fuel.id }, data: { tankLevel: { decrement: Number(quantity) } } });
+    await prisma.fuel.update({ where: { id: fuel.id }, data: { tankLevel: { decrement: liters } } });
 
     if (paymentMethod === 'Punkty') {
-         res.status(201).json({ message: `Opłacono punktami! Pobrano ${pointsDeducted} pkt.${documentMsg}` });
+         res.status(201).json({ message: `Opłacono punktami! Pobrano ${pointsDeducted} pkt.${documentMsg}`, invoice: invoicePayload });
     } else {
-         res.status(201).json({ message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt! ` : ''}${documentMsg}` });
+         res.status(201).json({ message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt! ` : ''}${documentMsg}`, invoice: invoicePayload });
     }
   } catch (error) {
     console.error(error);
@@ -171,9 +271,9 @@ router.get('/employee/schedule', async (req, res) => {
       year,
       month,
       schedules: schedules.map((entry) => ({
+        ...parseShiftRange(entry.shift),
         id: entry.id,
         date: formatDateOnly(entry.date),
-        startTime: entry.shift,
         employeeId: entry.employeeId,
         employee: entry.employee
       }))

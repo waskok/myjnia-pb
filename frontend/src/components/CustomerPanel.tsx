@@ -2,7 +2,7 @@ import React from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
 
 export const CustomerPanel: React.FC<AppLogic> = (props) => {
-  const { loyaltyPoints, activeCustTab, handleReservation, selectedService, setSelectedService, services, reservationDate, getMinDateTime, setReservationDate, myReservations, getStatusColor, myTransactions } = props;
+  const { activeCustTab, handleReservation, selectedService, setSelectedService, services, reservationDate, getMinDateTime, setReservationDate, myReservations, getStatusColor, myTransactions } = props;
 
   const getBadgeClass = (status: string) => {
     const normalized = status.toLowerCase();
@@ -14,13 +14,9 @@ export const CustomerPanel: React.FC<AppLogic> = (props) => {
 
   return (
     <div className="panel-content">
-      <div className="panel-meta">
-        <div className="points-badge">💧 Punkty lojalnościowe: <span>{loyaltyPoints}</span></div>
-      </div>
-
       {activeCustTab === 'book' && (
         <div className="card">
-          <h3>Nowa rezerwacja myjni</h3>
+          <h3>Umów mycie auta</h3>
           <form onSubmit={handleReservation} className="flex-col">
             <label>Wybierz usługę:</label>
             <select value={selectedService} className="select-field" onChange={(e) => setSelectedService(e.target.value)} required>
@@ -60,7 +56,7 @@ export const CustomerPanel: React.FC<AppLogic> = (props) => {
 
       {activeCustTab === 'buyHistory' && (
         <div className="card">
-          <h3>Twoja historia zakupów (kasa POS)</h3>
+          <h3>Historia zakupów</h3>
           {myTransactions.length === 0 ? <p>Brak historii zakupów na stacji.</p> : (
             <div className="list-grid">
               {myTransactions.map(t => (
@@ -70,7 +66,12 @@ export const CustomerPanel: React.FC<AppLogic> = (props) => {
                     <p className="item-meta">{new Date(t.date).toLocaleString()}</p>
                   </div>
                   <div className="summary-values">
-                    <strong>{t.totalAmount.toFixed(2)} zł</strong>
+                    <strong>
+                      {t.totalAmount.toFixed(2)} zł
+                      {typeof t.pointsDelta === 'number' && (
+                        <> | {t.pointsDelta > 0 ? `+${t.pointsDelta}` : t.pointsDelta} pkt</>
+                      )}
+                    </strong>
                     <span>{t.paymentMethod}</span>
                   </div>
                 </article>
