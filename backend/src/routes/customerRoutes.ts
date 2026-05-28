@@ -10,6 +10,32 @@ interface TokenPayload {
 
 const router = Router();
 
+interface LoyaltyRates {
+  pointsPerE95: number;
+  pointsPerE98: number;
+  pointsPerDiesel: number;
+  pointsPerLpg: number;
+}
+
+function getPointsRateForProduct(product: string, rates: LoyaltyRates): number | null {
+  const normalized = product.toUpperCase();
+  if (normalized.includes('LPG')) return rates.pointsPerLpg;
+  if (normalized.includes('98')) return rates.pointsPerE98;
+  if (normalized.includes('DIESEL') || normalized.includes('ON')) return rates.pointsPerDiesel;
+  if (normalized.includes('95') || normalized.includes('E95') || normalized.includes('PB95')) return rates.pointsPerE95;
+  return null;
+}
+
+function calculatePointsForItems(items: Array<{ product: string; quantity: number }>, rates: LoyaltyRates): number {
+  return items.reduce((sum, item) => {
+    const qty = Number(item.quantity) || 0;
+    if (qty <= 0) return sum;
+    const rate = getPointsRateForProduct(item.product, rates);
+    if (rate === null) return sum;
+    return sum + Math.floor(qty * rate);
+  }, 0);
+}
+
 // ==========================================
 // MODUŁ KLIENTA (USŁUGI I REZERWACJE)
 // ==========================================
@@ -57,7 +83,7 @@ router.post('/reservations', async (req, res) => {
       data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: reservationDate, status: 'Oczekująca' }
     });
 
-    res.status(201).json({ message: 'Rezerwacja potwierdzona i zapisana w bazie!' });
+    res.status(201).json({ message: 'Złożono rezerwację.' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd podczas rezerwacji. Zaloguj się ponownie.' });
@@ -114,7 +140,21 @@ router.get('/my-transactions', async (req, res) => {
       include: { items: true },
       orderBy: { date: 'desc' }
     });
-    res.json(transactions);
+    const loyalty = await prisma.loyaltyProgram.findFirst();
+    const loyaltyRates: LoyaltyRates = {
+      pointsPerE95: loyalty?.pointsPerE95 ?? 100,
+      pointsPerE98: loyalty?.pointsPerE98 ?? 100,
+      pointsPerDiesel: loyalty?.pointsPerDiesel ?? 100,
+      pointsPerLpg: loyalty?.pointsPerLpg ?? 50
+    };
+
+    res.json(
+      transactions.map((transaction) => {
+        const points = calculatePointsForItems(transaction.items, loyaltyRates);
+        const pointsDelta = transaction.paymentMethod === 'Punkty' ? -points : points;
+        return { ...transaction, pointsDelta };
+      })
+    );
   } catch (error) {
     res.status(500).json({ error: 'Błąd pobierania historii zakupów.' });
   }

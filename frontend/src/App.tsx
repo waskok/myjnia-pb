@@ -69,9 +69,9 @@ function App() {
 
   const customerButtons = (
     <>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'book' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('book')}>Rezerwacja</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'resHistory' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('resHistory')}>Rezerwacje</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'buyHistory' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('buyHistory')}>Historia</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'book' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('book')}>Umów mycie auta</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'resHistory' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('resHistory')}>Moje rezerwacje</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'buyHistory' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('buyHistory')}>Historia zakupów</button>
       <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'contact' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('contact')}>Kontakt</button>
       <button type="button" className="btn btn-danger" onClick={appLogic.logout}>Wyloguj</button>
     </>
@@ -182,7 +182,14 @@ function App() {
     >
       <header className="global-navbar">
         <div className="global-navbar-inner">
-          <div className="global-navbar-left">{leftTitle}</div>
+          <div className="global-navbar-left">
+            <span>{leftTitle}</span>
+            {appLogic.userRole === 'customer' && (
+              <span className="navbar-loyalty-inline">
+                Twoje punkty lojalnościowe: <strong>{appLogic.loyaltyPoints}</strong>
+              </span>
+            )}
+          </div>
           <div className="global-navbar-right">{rightButtons}</div>
         </div>
       </header>

@@ -389,7 +389,11 @@ export const useAppLogic = () => {
       const res = await fetch(`http://localhost:5000${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData) });
       const data = await res.json();
       if (res.ok) {
-        setMessage('✅ ' + data.message);
+        if (loginMode === 'customer' && !isLogin) {
+          setMessage('✅ Zarejestrowano pomyślnie! Możesz się teraz zalogować.');
+        } else {
+          setMessage('✅ ' + data.message);
+        }
         if (loginMode !== 'customer' || isLogin) {
           const resolvedRole = (data.user.role || 'customer') as SessionRole;
           localStorage.setItem('token', data.token);

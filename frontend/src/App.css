@@ -49,9 +49,24 @@ html, body, #root {
 }
 
 .global-navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
   color: #f8fafc;
   font-weight: 700;
   letter-spacing: 0.01em;
+}
+
+.navbar-loyalty-inline {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.navbar-loyalty-inline strong {
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .global-navbar-right {
