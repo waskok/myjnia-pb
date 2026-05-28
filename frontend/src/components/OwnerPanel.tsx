@@ -3,6 +3,7 @@ import type { AppLogic } from '../hooks/useAppLogic';
 import { MonitoringTab } from './MonitoringTab';
 import { OwnerScheduleTab } from './OwnerScheduleTab';
 import type { ReportPeriodType } from '../types';
+import { jsPDF } from 'jspdf';
 
 export const OwnerPanel: React.FC<AppLogic> = (props) => {
   const {
@@ -16,6 +17,96 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     handleDeleteScheduleEntry, setSelectedScheduleDates,
   } = props;
 
+  const getPeriodLabel = (period: ReportPeriodType) => {
+    if (period === 'all') return 'Cały czas';
+    if (period === 'daily') return 'Dzienny';
+    if (period === 'weekly') return 'Tygodniowy';
+    if (period === 'monthly') return 'Miesięczny';
+    return 'Roczny';
+  };
+
+  const getPeriodDetails = () => {
+    if (reportPeriod === 'all') return 'Zakres: wszystkie dostępne dane';
+    if (reportPeriod === 'daily') return `Dzień: ${reportDateStr.substring(0, 10)}`;
+    if (reportPeriod === 'weekly') return `Tydzień zawierający: ${reportDateStr.substring(0, 10)}`;
+    if (reportPeriod === 'monthly') return `Miesiąc: ${reportDateStr.substring(0, 7)}`;
+    return `Rok: ${reportDateStr.substring(0, 4)}`;
+  };
+
+  const toPdfText = (value: string) => {
+    const polishMap: Record<string, string> = {
+      ą: 'a', ć: 'c', ę: 'e', ł: 'l', ń: 'n', ó: 'o', ś: 's', ź: 'z', ż: 'z',
+      Ą: 'A', Ć: 'C', Ę: 'E', Ł: 'L', Ń: 'N', Ó: 'O', Ś: 'S', Ź: 'Z', Ż: 'Z',
+    };
+    return value.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, (char) => polishMap[char] ?? char);
+  };
+
+  const getTransactionAmountLabel = (totalAmount: number, paymentMethod: string, pointsUsed?: number) => {
+    if (paymentMethod === 'Punkty') return `-${pointsUsed ?? 0}`;
+    return `${totalAmount.toFixed(2)} zł`;
+  };
+
+  const handleExportReportPdf = () => {
+    if (!reportData) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    const maxLineWidth = pageWidth - margin * 2;
+    let y = 20;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Raport sprzedazy - Myjnia PB', margin, y);
+    y += 8;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(toPdfText(`Wygenerowano: ${new Date().toLocaleString('pl-PL')}`), margin, y);
+    y += 6;
+    doc.text(toPdfText(`Okres: ${getPeriodLabel(reportPeriod)}`), margin, y);
+    y += 6;
+    doc.text(toPdfText(getPeriodDetails()), margin, y);
+    y += 10;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Podsumowanie', margin, y);
+    y += 7;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.text(`Utarg: ${reportData.totalRevenue.toFixed(2)} zl`, margin, y);
+    y += 6;
+    doc.text(`Liczba transakcji: ${reportData.totalCount}`, margin, y);
+    y += 10;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Transakcje', margin, y);
+    y += 7;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+
+    reportData.transactions.forEach((t, index) => {
+      const customerName = t.customer ? `${t.customer.firstName} ${t.customer.lastName}` : 'Niezarejestrowany';
+      const employeeName = `${t.employee.firstName} ${t.employee.lastName}`;
+      const amountLabel = t.paymentMethod === 'Punkty' ? `-${t.pointsUsed ?? 0}` : `${t.totalAmount.toFixed(2)} zl`;
+      const line = `${index + 1}. ${new Date(t.date).toLocaleString('pl-PL')} | ${amountLabel} | ${t.paymentMethod} | Klient: ${customerName} | Kasjer: ${employeeName}`;
+      const wrapped = doc.splitTextToSize(toPdfText(line), maxLineWidth);
+      const nextY = y + wrapped.length * 5;
+      if (nextY > 285) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(wrapped, margin, y);
+      y += wrapped.length * 5 + 1;
+    });
+
+    const safeDatePart = reportDateStr.substring(0, 10).replace(/[^0-9-]/g, '-');
+    const fileName = `raport-${reportPeriod}-${safeDatePart || 'all'}.pdf`;
+    doc.save(fileName);
+  };
+
   return (
     <div className="panel-content">
 
@@ -26,11 +117,15 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
             <div className="form-inline">
               <label className="form-label">Okres:</label>
               <select className="select-field" value={reportPeriod} onChange={e => { const p = e.target.value as ReportPeriodType; setReportPeriod(p); fetchReports(p, reportDateStr); }}>
-                <option value="all">Cały czas</option><option value="daily">Dzienny</option><option value="monthly">Miesięczny</option><option value="yearly">Roczny</option>
+                <option value="all">Cały czas</option><option value="daily">Dzienny</option><option value="weekly">Tygodniowy</option><option value="monthly">Miesięczny</option><option value="yearly">Roczny</option>
               </select>
               {reportPeriod === 'daily' && <input type="date" className="input-field" value={reportDateStr.substring(0, 10)} onChange={e => handleDateChange(e.target.value)} />}
+              {reportPeriod === 'weekly' && <input type="date" className="input-field" value={reportDateStr.substring(0, 10)} onChange={e => handleDateChange(e.target.value)} />}
               {reportPeriod === 'monthly' && <input type="month" className="input-field" value={reportDateStr.substring(0, 7)} onChange={e => handleDateChange(e.target.value)} />}
               {reportPeriod === 'yearly' && <input type="number" min="2020" max="2100" className="input-field" value={reportDateStr.substring(0, 4)} onChange={e => handleDateChange(e.target.value)} />}
+              <button type="button" className="btn btn-primary" onClick={handleExportReportPdf} disabled={!reportData}>
+                Pobierz PDF
+              </button>
             </div>
           </div>
           
@@ -42,10 +137,6 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
             <div className="data-box text-center">
               <h4 style={{ margin: 0, color: '#64748b' }}>Liczba Transakcji</h4>
               <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#0f172a' }}>{reportData?.totalCount}</div>
-            </div>
-            <div className="data-box text-center">
-              <h4 style={{ margin: 0, color: '#64748b' }}>Średnia Transakcja</h4>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#0284c7' }}>{((reportData?.totalRevenue || 0) / (reportData?.totalCount || 1)).toFixed(2)} zł</div>
             </div>
           </div>
 
@@ -59,7 +150,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
                   <p className="item-meta">Kasjer: {t.employee.firstName}</p>
                 </div>
                 <div className="summary-values">
-                  <strong>{t.totalAmount.toFixed(2)} zł</strong>
+                  <strong>{getTransactionAmountLabel(t.totalAmount, t.paymentMethod, t.pointsUsed)}</strong>
                   <span>{t.paymentMethod}</span>
                 </div>
               </article>

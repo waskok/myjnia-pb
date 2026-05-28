@@ -10,7 +10,21 @@ interface TokenPayload {
   email?: string;
 }
 
+interface PointsCalculationItem {
+  product: string;
+  quantity: number;
+}
+
 const router = Router();
+
+function calculatePointsUsed(items: PointsCalculationItem[]): number {
+  return items.reduce((sum, item) => {
+    const qty = Math.floor(Number(item.quantity) || 0);
+    if (qty <= 0) return sum;
+    const isLpg = item.product.toUpperCase().includes('LPG');
+    return sum + qty * (isLpg ? 50 : 100);
+  }, 0);
+}
 
 // ==========================================
 // MODUŁ WŁAŚCICIELA 
@@ -110,6 +124,15 @@ router.get('/owner/reports', async (req, res) => {
       if (period === 'daily') {
         startDate = new Date(year, month, day, 0, 0, 0);
         endDate = new Date(year, month, day, 23, 59, 59, 999);
+      } else if (period === 'weekly') {
+        const dayOfWeek = targetDate.getDay();
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const monday = new Date(year, month, day + mondayOffset, 0, 0, 0, 0);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        sunday.setHours(23, 59, 59, 999);
+        startDate = monday;
+        endDate = sunday;
       } else if (period === 'monthly') {
         startDate = new Date(year, month, 1, 0, 0, 0);
         endDate = new Date(year, month + 1, 0, 23, 59, 59, 999); 
@@ -141,14 +164,25 @@ router.get('/owner/reports', async (req, res) => {
       orderBy: { date: 'desc' },
       include: {
         customer: { select: { firstName: true, lastName: true } },
-        employee: { select: { firstName: true, lastName: true } }
+        employee: { select: { firstName: true, lastName: true } },
+        items: { select: { product: true, quantity: true } }
       }
     });
 
     res.json({
       totalRevenue: revenueStats._sum.totalAmount || 0,
       totalCount: transactionCount,
-      transactions: recentTransactions
+      transactions: recentTransactions.map((transaction) => {
+        const pointsUsed =
+          transaction.paymentMethod === 'Punkty'
+            ? calculatePointsUsed(transaction.items)
+            : 0;
+
+        return {
+          ...transaction,
+          pointsUsed
+        };
+      })
     });
   } catch (error) {
     console.error(error);

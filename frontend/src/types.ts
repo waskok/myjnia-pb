@@ -6,10 +6,10 @@ export interface Fuel { id: number; type: string; pricePerLiter: number; tankLev
 export interface Delivery { id: number; fuel: Fuel; quantity: number; status: string; deliveryDate: string; supplier: string; owner?: { firstName: string; lastName: string; } }
 export interface MonitoringData { fuels: Fuel[]; lpg: { pressure: string; temp: string; }; carWash: { bay: number; occupied: boolean; camera: string; }[]; alerts: string[]; }
 export interface TransactionItem { id?: number; product: string; quantity: number; value: number; }
-export interface Transaction { id: number; totalAmount: number; date: string; paymentMethod: string; customer?: { firstName: string; lastName: string; }; employee: { firstName: string; lastName: string; }; items?: TransactionItem[]; }
+export interface Transaction { id: number; totalAmount: number; date: string; paymentMethod: string; customer?: { firstName: string; lastName: string; }; employee: { firstName: string; lastName: string; }; items?: TransactionItem[]; pointsUsed?: number; }
 export interface ReportData { totalRevenue: number; totalCount: number; transactions: Transaction[]; }
 
-export type ReportPeriodType = 'all' | 'daily' | 'monthly' | 'yearly';
+export type ReportPeriodType = 'all' | 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type ActiveCustTab = 'book' | 'resHistory' | 'buyHistory' | 'contact';
 
 export interface ScheduleEntry {
