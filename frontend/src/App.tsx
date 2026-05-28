@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import { useAppLogic } from './hooks/useAppLogic';
 import { AuthScreen } from './components/AuthScreen';
@@ -10,6 +10,7 @@ import heroImage from './assets/MyjniaPB.jpg';
 
 function App() {
   const appLogic = useAppLogic();
+  const [publicPage, setPublicPage] = useState<'home' | 'auth'>('home');
   type EmployeeTab = 'pos' | 'rezerwacje' | 'monitoring' | 'lpg' | 'grafik';
   const allowedEmployeeTabs = useMemo(() => {
     if (appLogic.employeeJobRole === 'Kasjer') return ['pos', 'grafik'] as EmployeeTab[];
@@ -33,7 +34,21 @@ function App() {
   } else if (appLogic.userRole === 'customer') {
     panel = <CustomerPanel {...appLogic} />;
   } else {
-    panel = <AuthScreen {...appLogic} />;
+    panel = publicPage === 'home' ? (
+      <div className="card home-card">
+        <h2>Witamy w Myjnia PB</h2>
+        <p>
+          Myjnia PB to nowoczesna stacja i myjnia samochodowa z szybkim systemem rezerwacji,
+          programem lojalnościowym oraz wygodną obsługą klientów indywidualnych i firm.
+        </p>
+        <p>
+          Na miejscu oferujemy paliwa, usługi myjni oraz przejrzysty system historii zakupów i rezerwacji.
+          Zarezerwuj termin online albo zaloguj się do odpowiedniej strefy, aby zarządzać swoim kontem.
+        </p>
+      </div>
+    ) : (
+      <AuthScreen {...appLogic} />
+    );
   }
 
   const leftTitle =
@@ -49,8 +64,16 @@ function App() {
     <>
       <button
         type="button"
-        className={`tab-btn-large ${appLogic.loginMode === 'customer' ? 'tab-active-primary' : 'tab-inactive'}`}
+        className={`tab-btn-large ${publicPage === 'home' ? 'tab-active-primary' : 'tab-inactive'}`}
+        onClick={() => setPublicPage('home')}
+      >
+        Strona główna
+      </button>
+      <button
+        type="button"
+        className={`tab-btn-large ${publicPage === 'auth' && appLogic.loginMode === 'customer' ? 'tab-active-primary' : 'tab-inactive'}`}
         onClick={() => {
+          setPublicPage('auth');
           appLogic.setLoginMode('customer');
           appLogic.setIsLogin(true);
         }}
@@ -59,8 +82,11 @@ function App() {
       </button>
       <button
         type="button"
-        className={`tab-btn-large ${appLogic.loginMode === 'staff' ? 'tab-active-primary' : 'tab-inactive'}`}
-        onClick={() => appLogic.setLoginMode('staff')}
+        className={`tab-btn-large ${publicPage === 'auth' && appLogic.loginMode === 'staff' ? 'tab-active-primary' : 'tab-inactive'}`}
+        onClick={() => {
+          setPublicPage('auth');
+          appLogic.setLoginMode('staff');
+        }}
       >
         Strefa Pracownika
       </button>
@@ -172,6 +198,8 @@ function App() {
           ? ownerButtons
           : authButtons;
 
+  const shouldShowFooter = appLogic.userRole === null || appLogic.userRole === 'customer';
+
   return (
     <div
       className="app-background"
@@ -183,7 +211,13 @@ function App() {
       <header className="global-navbar">
         <div className="global-navbar-inner">
           <div className="global-navbar-left">
-            <span>{leftTitle}</span>
+            {appLogic.userRole ? (
+              <span>{leftTitle}</span>
+            ) : (
+              <button type="button" className="navbar-brand-link" onClick={() => setPublicPage('home')}>
+                Myjnia PB
+              </button>
+            )}
             {appLogic.userRole === 'customer' && (
               <span className="navbar-loyalty-inline">
                 Twoje punkty lojalnościowe: <strong>{appLogic.loyaltyPoints}</strong>
@@ -201,6 +235,16 @@ function App() {
       <main className="main-shell">
         {panel}
       </main>
+      {shouldShowFooter && (
+        <footer className="global-footer">
+          <div className="global-footer-inner">
+            <span className="footer-brand">Myjnia PB</span>
+            <span>ul. Jana Pawła II 37, 31-864 Kraków</span>
+            <span>+48 123 456 789</span>
+            <span>kontakt@myjniapb.pl</span>
+          </div>
+        </footer>
+      )}
       <Toast message={appLogic.message} onDismiss={appLogic.clearMessage} />
     </div>
   );

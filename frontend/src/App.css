@@ -23,6 +23,8 @@ html, body, #root {
 }
 
 .app-background {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background-position: center;
   background-size: cover;
@@ -56,6 +58,20 @@ html, body, #root {
   color: #f8fafc;
   font-weight: 700;
   letter-spacing: 0.01em;
+}
+
+.navbar-brand-link {
+  border: none;
+  background: transparent;
+  color: #f8fafc;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.navbar-brand-link:hover {
+  text-decoration: underline;
 }
 
 .navbar-loyalty-inline {
@@ -143,9 +159,42 @@ html, body, #root {
 }
 
 .main-shell {
+  flex: 1;
   width: min(1340px, 100%);
   margin: 0 auto;
   padding: 20px 16px 32px;
+}
+
+.global-footer {
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.global-footer-inner {
+  width: min(1340px, 100%);
+  margin: 0 auto;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: rgba(241, 245, 249, 0.94);
+  font-size: 0.88rem;
+}
+
+.global-footer-inner span:not(:last-child)::after {
+  content: '•';
+  margin-left: 16px;
+  color: rgba(203, 213, 225, 0.72);
+}
+
+.footer-brand {
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .panel-content {
@@ -174,6 +223,17 @@ html, body, #root {
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.3);
   color: var(--text-main);
+}
+
+.home-card h2 {
+  margin: 0 0 12px;
+  color: var(--text-main);
+}
+
+.home-card p {
+  margin: 0 0 10px;
+  color: #334155;
+  line-height: 1.5;
 }
 
 .login-container {
