@@ -153,6 +153,7 @@ html, body, #root {
 .btn-dark { background: linear-gradient(135deg, #1e293b, #0f172a); color: #fff; }
 .btn-light { background: rgba(255, 255, 255, 0.9); color: #0f172a; border: 1px solid #cbd5e1; }
 .btn-compact { padding: 8px 12px; font-size: 0.86rem; align-self: flex-end; }
+.btn-verify { padding: 7px 10px; font-size: 0.82rem; align-self: center; white-space: nowrap; }
 
 .tab-btn-large {
   border: 1px solid transparent;
@@ -239,6 +240,29 @@ html, body, #root {
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(248, 250, 252, 0.72);
+}
+
+.pos-step-card {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.72);
+  padding: 12px;
+}
+
+.pos-customer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pos-customer-row .input-field {
+  flex: 1;
+}
+
+.pos-fuel-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .summary-values {

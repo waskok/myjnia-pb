@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { WashService, Reservation, Transaction, Fuel, Customer, Delivery, Employee, MonitoringData, ReportData, ReportPeriodType, ActiveCustTab, ScheduleMonthData } from '../types';
+import { jsPDF } from 'jspdf';
 
 type EmployeeJobRole = 'Kasjer' | 'Monitoring' | 'Obsługa Myjni' | 'Obsługa dystrybutora LPG';
 type SessionRole = 'customer' | 'employee' | 'owner';
@@ -7,6 +8,28 @@ type StoredSession = {
   firstName: string;
   role: SessionRole;
   jobRole?: EmployeeJobRole;
+};
+
+type GeneratedInvoice = {
+  number: string;
+  issueDate: string;
+  amount: number;
+  paymentMethod: string;
+  quantity: number;
+  fuelType: string;
+  unitPrice: number;
+  buyer: {
+    name: string;
+    address: string;
+    email: string;
+    phone: string;
+    type: 'individual' | 'company';
+    identifiers: {
+      pesel?: string;
+      nip?: string;
+      regon?: string;
+    };
+  };
 };
 
 export const useAppLogic = () => {
@@ -86,6 +109,84 @@ export const useAppLogic = () => {
     if (status === 'Anulowana') return '#dc3545';  
     if (status === 'Oczekująca') return '#ffc107'; 
     return '#334155';
+  };
+
+  const toPdfText = (value: string) => {
+    const polishMap: Record<string, string> = {
+      ą: 'a', ć: 'c', ę: 'e', ł: 'l', ń: 'n', ó: 'o', ś: 's', ź: 'z', ż: 'z',
+      Ą: 'A', Ć: 'C', Ę: 'E', Ł: 'L', Ń: 'N', Ó: 'O', Ś: 'S', Ź: 'Z', Ż: 'Z',
+    };
+    return value.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, (char) => polishMap[char] ?? char);
+  };
+
+  const downloadInvoicePdf = (invoice: GeneratedInvoice) => {
+    const doc = new jsPDF();
+    const margin = 14;
+    let y = 20;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Faktura VAT', margin, y);
+    y += 8;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.text(toPdfText(`Numer: ${invoice.number}`), margin, y);
+    y += 6;
+    doc.text(toPdfText(`Data wystawienia: ${new Date(invoice.issueDate).toLocaleString('pl-PL')}`), margin, y);
+    y += 10;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Sprzedawca:', margin, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.text('Myjnia PB', margin, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Nabywca:', margin, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.text(toPdfText(invoice.buyer.name), margin, y);
+    y += 6;
+    doc.text(toPdfText(invoice.buyer.address), margin, y);
+    y += 6;
+    doc.text(toPdfText(`Email: ${invoice.buyer.email}`), margin, y);
+    y += 6;
+    doc.text(toPdfText(`Telefon: ${invoice.buyer.phone}`), margin, y);
+    y += 6;
+    if (invoice.buyer.identifiers.pesel) {
+      doc.text(`PESEL: ${invoice.buyer.identifiers.pesel}`, margin, y);
+      y += 6;
+    }
+    if (invoice.buyer.identifiers.nip) {
+      doc.text(`NIP: ${invoice.buyer.identifiers.nip}`, margin, y);
+      y += 6;
+    }
+    if (invoice.buyer.identifiers.regon) {
+      doc.text(`REGON: ${invoice.buyer.identifiers.regon}`, margin, y);
+      y += 6;
+    }
+
+    y += 4;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Pozycja:', margin, y);
+    y += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.text(toPdfText(`Paliwo ${invoice.fuelType}`), margin, y);
+    y += 6;
+    doc.text(`Ilosc: ${invoice.quantity.toFixed(2)} L`, margin, y);
+    y += 6;
+    doc.text(`Cena jednostkowa: ${invoice.unitPrice.toFixed(2)} PLN`, margin, y);
+    y += 6;
+    doc.text(`Metoda platnosci: ${toPdfText(invoice.paymentMethod)}`, margin, y);
+    y += 8;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text(`Do zaplaty: ${invoice.amount.toFixed(2)} PLN`, margin, y);
+
+    doc.save(`${invoice.number.replace(/[\\/]/g, '-')}.pdf`);
   };
 
   const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -309,7 +410,7 @@ export const useAppLogic = () => {
   };
 
   const handleVerifyCustomer = async () => { if (!posCustomerQuery) return; try { const token = localStorage.getItem('token'); const res = await fetch(`http://localhost:5000/api/employee/customer/${encodeURIComponent(posCustomerQuery)}`, { headers: { 'Authorization': `Bearer ${token}` } }); const data = await res.json(); if (res.ok) { setPosVerifiedCustomer(data); setPosData({ ...posData, customerEmail: data.email }); setMessage('✅ Zweryfikowano!'); } else { setPosVerifiedCustomer(null); setPosData({ ...posData, customerEmail: '' }); setMessage('❌ ' + data.error); } } catch (e) { console.error(e); } };
-  const handlePOSSubmit = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); setPosVerifiedCustomer(null); setPosCustomerQuery(''); fetchFuels(); } else setMessage('❌ ' + data.error); } catch (e) { console.error(e); } };
+  const handlePOSSubmit = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; if (posData.issueInvoice && !posVerifiedCustomer) { setMessage('❌ Aby wystawić fakturę, najpierw zweryfikuj klienta (e-mail lub telefon).'); return; } const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); const data = await res.json(); if (res.ok) { if (data.invoice) { downloadInvoicePdf(data.invoice as GeneratedInvoice); } setMessage('✅ ' + data.message); setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); setPosVerifiedCustomer(null); setPosCustomerQuery(''); fetchFuels(); } else setMessage('❌ ' + data.error); } catch (e) { console.error(e); } };
   const handleReservation = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch('http://localhost:5000/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate }) }); const data = await res.json(); if (res.ok) { setMessage('✅ ' + data.message); setReservationDate(''); fetchCustomerData(token); } else { setMessage('❌ ' + data.error); } } catch (e) { console.error(e); } };
   const handleCompleteReservation = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Zakończono!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };
   const handleCancelReservation = async (id: number) => { if (!window.confirm('Czy na pewno chcesz anulować tę rezerwację?')) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/cancel`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Rezerwacja anulowana!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };

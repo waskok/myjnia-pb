@@ -12,6 +12,36 @@ interface TokenPayload {
 const router = Router();
 const SHIFT_RANGE_REGEX = /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/;
 
+interface InvoicePayload {
+  number: string;
+  issueDate: string;
+  amount: number;
+  paymentMethod: string;
+  quantity: number;
+  fuelType: string;
+  unitPrice: number;
+  buyer: {
+    name: string;
+    address: string;
+    email: string;
+    phone: string;
+    type: 'individual' | 'company';
+    identifiers: {
+      pesel?: string;
+      nip?: string;
+      regon?: string;
+    };
+  };
+}
+
+function buildInvoiceIdentifiers(params: { pesel?: string | null; nip?: string | null; regon?: string | null }) {
+  const identifiers: { pesel?: string; nip?: string; regon?: string } = {};
+  if (params.pesel) identifiers.pesel = params.pesel;
+  if (params.nip) identifiers.nip = params.nip;
+  if (params.regon) identifiers.regon = params.regon;
+  return identifiers;
+}
+
 function parseShiftRange(shift: string): { startTime: string; endTime: string } {
   if (SHIFT_RANGE_REGEX.test(shift)) {
     const [startTime = shift, endTime = shift] = shift.split('-');
@@ -118,22 +148,57 @@ router.post('/transactions/fuel', async (req, res) => {
       }
     });
 
-    let documentMsg = ' Drukowanie paragonu...'; 
+    let documentMsg = ' Drukowanie paragonu...';
+    let invoicePayload: InvoicePayload | null = null;
+    if (issueInvoice && !customer) {
+      return res.status(400).json({ error: 'Aby wystawić fakturę, podaj e-mail zarejestrowanego klienta!' });
+    }
+    if (issueInvoice && customer && !customer.registered) {
+      return res.status(400).json({ error: 'Fakturę można wystawić tylko zarejestrowanemu klientowi.' });
+    }
     if (issueInvoice && customer && totalAmount > 0) {
-        await prisma.invoice.create({
-            data: { customerId: customer.id, transactionId: transaction.id, number: `FV/${new Date().getFullYear()}/${transaction.id}`, amount: totalAmount }
-        });
-        documentMsg = ' Wystawiono Fakturę VAT.'; 
-    } else if (issueInvoice && !customer) {
-        return res.status(400).json({ error: 'Aby wystawić fakturę, podaj e-mail zarejestrowanego klienta!' });
+      const invoiceNumber = `FV/${new Date().getFullYear()}/${transaction.id}`;
+      const invoice = await prisma.invoice.create({
+        data: { customerId: customer.id, transactionId: transaction.id, number: invoiceNumber, amount: totalAmount }
+      });
+
+      const [individualData, companyData] = await Promise.all([
+        prisma.individualCustomer.findUnique({ where: { customerId: customer.id } }),
+        prisma.companyCustomer.findUnique({ where: { customerId: customer.id } })
+      ]);
+
+      const identifiersInput: { pesel?: string | null; nip?: string | null; regon?: string | null } = {};
+      if (individualData?.pesel) identifiersInput.pesel = individualData.pesel;
+      if (companyData?.nip || individualData?.nip) identifiersInput.nip = companyData?.nip || individualData?.nip || null;
+      if (companyData?.regon) identifiersInput.regon = companyData.regon;
+
+      invoicePayload = {
+        number: invoice.number,
+        issueDate: invoice.date.toISOString(),
+        amount: totalAmount,
+        paymentMethod,
+        quantity: Number(quantity),
+        fuelType: fuel.type,
+        unitPrice: fuel.pricePerLiter,
+        buyer: {
+          name: companyData?.companyName || `${customer.firstName} ${customer.lastName}`,
+          address: customer.address,
+          email: customer.email,
+          phone: customer.phone,
+          type: companyData ? 'company' : 'individual',
+          identifiers: buildInvoiceIdentifiers(identifiersInput)
+        }
+      };
+
+      documentMsg = ' Wystawiono Fakturę VAT.';
     }
 
     await prisma.fuel.update({ where: { id: fuel.id }, data: { tankLevel: { decrement: Number(quantity) } } });
 
     if (paymentMethod === 'Punkty') {
-         res.status(201).json({ message: `Opłacono punktami! Pobrano ${pointsDeducted} pkt.${documentMsg}` });
+         res.status(201).json({ message: `Opłacono punktami! Pobrano ${pointsDeducted} pkt.${documentMsg}`, invoice: invoicePayload });
     } else {
-         res.status(201).json({ message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt! ` : ''}${documentMsg}` });
+         res.status(201).json({ message: `Sprzedano: ${totalAmount.toFixed(2)} zł. ${pointsEarned > 0 ? `Klient zyskał ${pointsEarned} pkt! ` : ''}${documentMsg}`, invoice: invoicePayload });
     }
   } catch (error) {
     console.error(error);

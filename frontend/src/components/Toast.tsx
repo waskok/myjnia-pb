@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
-const VISIBLE_MS = 1000;
+const BASE_VISIBLE_MS = 3500;
+const MAX_VISIBLE_MS = 7000;
 const FADE_MS = 350;
 
 interface ToastProps {
@@ -22,11 +23,17 @@ export const Toast: React.FC<ToastProps> = ({ message, onDismiss }) => {
     setVisible(true);
     setExiting(false);
 
-    const hideTimer = setTimeout(() => setExiting(true), VISIBLE_MS);
+    const text = message.replace(/^✅\s*|^❌\s*/, '');
+    const dynamicVisibleMs = Math.min(
+      MAX_VISIBLE_MS,
+      BASE_VISIBLE_MS + Math.max(0, text.length - 80) * 30
+    );
+
+    const hideTimer = setTimeout(() => setExiting(true), dynamicVisibleMs);
     const dismissTimer = setTimeout(() => {
       setVisible(false);
       onDismiss();
-    }, VISIBLE_MS + FADE_MS);
+    }, dynamicVisibleMs + FADE_MS);
 
     return () => {
       clearTimeout(hideTimer);

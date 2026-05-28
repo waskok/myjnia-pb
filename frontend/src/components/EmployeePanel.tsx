@@ -18,6 +18,7 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
   const pointsCostPerLiter = selectedFuel?.type === 'LPG' ? 50 : 100;
   const costPoints = Math.floor(posData.quantity) * pointsCostPerLiter;
   const canAffordWithPoints = posVerifiedCustomer && posVerifiedCustomer.loyaltyPoints >= costPoints;
+  const invoiceNeedsVerification = posData.issueInvoice && !posVerifiedCustomer;
   const canViewPos = employeeJobRole === 'Kasjer';
   const canViewMonitoring = employeeJobRole === 'Monitoring';
   const canViewMyjnia = employeeJobRole === 'Obsługa Myjni';
@@ -30,13 +31,25 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
 
       {activeEmpTab === 'pos' && canViewPos && (
         <div className="card">
-          <h3>Kasa Fiskalna (Sprzedaż Paliwa)</h3>
-          <div className="filter-box mb-15">
-             <div style={{ flex: 1 }}>
-               <label>🔎 1. Skanuj klienta (E-mail lub Telefon):</label>
-               <input type="text" className="input-field w-full" value={posCustomerQuery} onChange={e => setPosCustomerQuery(e.target.value)} placeholder="Wpisz dane i kliknij Sprawdź..." />
-             </div>
-             <button type="button" onClick={handleVerifyCustomer} className="btn btn-dark btn-compact">Sprawdź</button>
+          <h3>Kasa fiskalna - sprzedaż paliwa</h3>
+
+          <div className="pos-step-card mb-15">
+            <label className="form-label">Klient (e-mail lub telefon)</label>
+            <div className="pos-customer-row">
+              <input
+                type="text"
+                className="input-field"
+                value={posCustomerQuery}
+                onChange={e => setPosCustomerQuery(e.target.value)}
+                placeholder="Wpisz dane klienta"
+              />
+              <button type="button" onClick={handleVerifyCustomer} className="btn btn-light btn-verify">
+                Sprawdź
+              </button>
+            </div>
+            <p className="text-muted" style={{ margin: '6px 0 0', fontSize: '0.9rem' }}>
+              Zweryfikuj klienta, aby odblokować płatność punktami.
+            </p>
           </div>
 
           {posVerifiedCustomer && (
@@ -46,30 +59,45 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
           )}
 
           <form onSubmit={handlePOSSubmit} className="flex-col">
-            <div className="flex-row">
-              <div style={{ flex: 2 }}><label>2. Wybierz paliwo:</label><select name="fuelId" className="select-field w-full" value={posData.fuelId} onChange={handlePosChange}>{fuels.map(f => <option key={f.id} value={f.id}>{f.type} - {f.pricePerLiter} zł/l (Dostępne: {f.tankLevel} l)</option>)}</select></div>
-              <div style={{ flex: 1 }}><label>Ilość (L):</label><input type="number" name="quantity" className="input-field w-full" min="1" step="0.01" value={posData.quantity} onChange={handlePosChange} required /></div>
+            <div className="pos-step-card">
+              <div className="pos-fuel-row">
+                <div style={{ flex: 2 }}>
+                  <label>Wybierz paliwo</label>
+                  <select name="fuelId" className="select-field w-full" value={posData.fuelId} onChange={handlePosChange}>
+                    {fuels.map(f => <option key={f.id} value={f.id}>{f.type} - {f.pricePerLiter} zł/l (Dostępne: {f.tankLevel} l)</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label>Ilość (L)</label>
+                  <input type="number" name="quantity" className="input-field w-full" min="1" step="0.01" value={posData.quantity} onChange={handlePosChange} required />
+                </div>
+              </div>
             </div>
             
             <div className="points-badge my-15" style={{ background: '#f1f5f9', color: '#0f172a', padding: '15px' }}>
               <span style={{ fontSize: '18px' }}>Do zapłaty: <strong>{costPLN} zł</strong></span> {posVerifiedCustomer && (<span> albo <strong style={{ color: '#10b981' }}>{costPoints} pkt</strong></span>)}
             </div>
 
-            <div className="flex-row">
+            <div className="pos-step-card">
               <div style={{ flex: 1 }}>
-                <label>3. Płatność:</label>
+                <label>Płatność</label>
                 <select name="paymentMethod" className="select-field w-full" value={posData.paymentMethod} onChange={handlePosChange}>
                   <option value="Karta">Karta</option><option value="Gotówka">Gotówka</option>
                   {posVerifiedCustomer && <option value="Punkty" disabled={!canAffordWithPoints}>Punkty Lojalnościowe {canAffordWithPoints ? '' : '(Zbyt mało)'}</option>}
                 </select>
               </div>
-            </div>
 
-            <div className="flex-row flex-start mt-10">
-              <input type="checkbox" name="issueInvoice" id="issueInvoice" className="checkbox-large" checked={posData.issueInvoice} onChange={handlePosChange} />
-              <label htmlFor="issueInvoice" style={{ fontWeight: 'bold' }}>Wystaw Fakturę VAT</label>
+              <div className="flex-row flex-start mt-10">
+                <input type="checkbox" name="issueInvoice" id="issueInvoice" className="checkbox-large" checked={posData.issueInvoice} onChange={handlePosChange} />
+                <label htmlFor="issueInvoice" style={{ fontWeight: 'bold' }}>Wystaw Fakturę VAT</label>
+              </div>
+              {invoiceNeedsVerification && (
+                <p className="text-danger" style={{ marginTop: '8px' }}>
+                  Aby wystawić fakturę, najpierw zweryfikuj klienta.
+                </p>
+              )}
             </div>
-            <button type="submit" className="btn btn-primary mt-15 w-auto">Zatwierdź sprzedaż</button>
+            <button type="submit" className="btn btn-primary mt-15 w-auto" disabled={invoiceNeedsVerification}>Zatwierdź sprzedaż</button>
           </form>
         </div>
       )}
