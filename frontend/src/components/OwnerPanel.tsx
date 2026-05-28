@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
 import { MonitoringTab } from './MonitoringTab';
 import { OwnerScheduleTab } from './OwnerScheduleTab';
@@ -11,13 +11,19 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     handleDateChange, fetchReports, reportData, fuels, newPrice, setNewPrice, handleUpdatePrice,
     loyaltyConfig, handleLoyaltyConfigChange, handleSaveLoyaltyConfig,
     newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery,
-    newEmployee, setNewEmployee, handleAddEmployee, employees, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleDeleteEmployee, customers,
+    newEmployee, setNewEmployee, handleAddEmployee, employees, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, customers,
     fetchMonitoring, monitoringData, scheduleYear, scheduleMonth, scheduleData,
     selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime,
     scheduleEndTime, setScheduleEndTime,
     changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule,
     handleDeleteScheduleEntry, setSelectedScheduleDates,
   } = props;
+  const [employeeListFilter, setEmployeeListFilter] = useState<'active' | 'archived' | 'all'>('active');
+  const filteredEmployees = useMemo(() => {
+    if (employeeListFilter === 'active') return employees.filter((emp) => emp.isActive);
+    if (employeeListFilter === 'archived') return employees.filter((emp) => !emp.isActive);
+    return employees;
+  }, [employees, employeeListFilter]);
 
   const getPeriodLabel = (period: ReportPeriodType) => {
     if (period === 'all') return 'Cały czas';
@@ -210,19 +216,34 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
           </div>
           
           <div className="card">
-            <h3>Lista Pracowników</h3>
+            <div className="flex-space-between mb-15" style={{ alignItems: 'center' }}>
+              <h3 style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>Lista Pracowników</h3>
+              <div className="row-actions">
+                <button type="button" className={`tab-btn-large ${employeeListFilter === 'active' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => setEmployeeListFilter('active')}>Aktywni</button>
+                <button type="button" className={`tab-btn-large ${employeeListFilter === 'archived' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => setEmployeeListFilter('archived')}>Archiwalni</button>
+                <button type="button" className={`tab-btn-large ${employeeListFilter === 'all' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => setEmployeeListFilter('all')}>Wszyscy</button>
+              </div>
+            </div>
             <div className="list-grid">
-              {employees.map(emp => (
+              {filteredEmployees.map(emp => (
                 <article key={emp.id} className="list-item card-like">
                   <div>
                     <p className="item-title">{emp.firstName} {emp.lastName}</p>
                     <p className="item-meta">Rola: {emp.role}</p>
                     <p className="item-meta">Login: {emp.login}</p>
+                    <p className="item-meta">Status: {emp.isActive ? 'Aktywny' : 'Archiwalny'}</p>
                   </div>
                   <div className="row-actions">
-                    <button onClick={() => handleChangeEmployeeLogin(emp.id, emp.login)} className="btn btn-light">Zmień login</button>
-                    <button onClick={() => handleChangeEmployeePassword(emp.id)} className="btn btn-warning">Zmień hasło</button>
-                    <button onClick={() => handleDeleteEmployee(emp.id)} className="btn btn-danger">Usuń pracownika</button>
+                    {emp.isActive && (
+                      <>
+                        <button onClick={() => handleChangeEmployeeLogin(emp.id, emp.login)} className="btn btn-light">Zmień login</button>
+                        <button onClick={() => handleChangeEmployeePassword(emp.id)} className="btn btn-warning">Zmień hasło</button>
+                        <button onClick={() => handleArchiveEmployee(emp.id)} className="btn btn-dark">Archiwizuj</button>
+                      </>
+                    )}
+                    {!emp.isActive && (
+                      <button onClick={() => handleRestoreEmployee(emp.id)} className="btn btn-success">Przywróć</button>
+                    )}
                   </div>
                 </article>
               ))}

@@ -153,6 +153,9 @@ router.post('/staff/login', async (req, res) => {
 
     const employee = await prisma.employee.findUnique({ where: { login } });
     if (employee) {
+      if (!employee.isActive) {
+        return res.status(403).json({ error: 'To konto pracownika jest archiwalne i nie może się logować.' });
+      }
       const isPasswordValid = await bcrypt.compare(password, employee.password);
       if (isPasswordValid) {
         const token = jwt.sign(

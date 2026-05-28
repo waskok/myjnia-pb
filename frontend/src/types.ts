@@ -1,4 +1,4 @@
-export interface Employee { id: number; firstName: string; lastName: string; role: string; login: string; email?: string; phone?: string; }
+export interface Employee { id: number; firstName: string; lastName: string; role: string; isActive: boolean; login: string; email?: string; phone?: string; }
 export interface Customer { id: number; firstName: string; lastName: string; email: string; phone: string; loyaltyPoints: number; registered: boolean; }
 export interface WashService { id: number; type: string; price: number; loyaltyPoints: number; }
 export interface Reservation { id: number; date: string; status: string; washService: WashService; customer?: { firstName: string; lastName: string; phone: string; }; }

@@ -53,10 +53,11 @@ router.get('/owner/employees', async (req, res) => {
 
     const employees = await prisma.employee.findMany({
       where: { ownerId: decoded.id },
-      select: { id: true, firstName: true, lastName: true, role: true, login: true, email: true, phone: true }
+      select: { id: true, firstName: true, lastName: true, role: true, isActive: true, login: true, email: true, phone: true }
     });
     res.json(employees);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Błąd pobierania pracowników.' });
   }
 });
@@ -107,12 +108,60 @@ router.delete('/owner/employees/:id', async (req, res) => {
   } catch (error) {
     const prismaError = error as { code?: string };
     if (prismaError.code === 'P2003') {
-      return res.status(409).json({
-        error: 'Nie można usunąć pracownika, ponieważ ma powiązane transakcje. Oznacz konto jako nieaktywne lub przenieś historię.'
-      });
+      return res.status(409).json({ error: 'Nie można usunąć pracownika, ponieważ ma powiązane transakcje. Użyj akcji "Archiwizuj".' });
     }
     console.error(error);
     res.status(500).json({ error: 'Błąd podczas usuwania pracownika.' });
+  }
+});
+
+router.patch('/owner/employees/:id/archive', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const employeeId = Number(req.params.id);
+    if (!employeeId || Number.isNaN(employeeId)) return res.status(400).json({ error: 'Nieprawidłowe ID pracownika.' });
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, ownerId: decoded.id },
+      select: { id: true, isActive: true }
+    });
+    if (!employee) return res.status(404).json({ error: 'Nie znaleziono pracownika przypisanego do tego właściciela.' });
+    if (!employee.isActive) return res.status(400).json({ error: 'Pracownik jest już archiwalny.' });
+
+    await prisma.employee.update({ where: { id: employeeId }, data: { isActive: false } });
+    res.json({ message: 'Pracownik został przeniesiony do archiwum.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd archiwizacji pracownika.' });
+  }
+});
+
+router.patch('/owner/employees/:id/restore', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const employeeId = Number(req.params.id);
+    if (!employeeId || Number.isNaN(employeeId)) return res.status(400).json({ error: 'Nieprawidłowe ID pracownika.' });
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, ownerId: decoded.id },
+      select: { id: true, isActive: true }
+    });
+    if (!employee) return res.status(404).json({ error: 'Nie znaleziono pracownika przypisanego do tego właściciela.' });
+    if (employee.isActive) return res.status(400).json({ error: 'Pracownik jest już aktywny.' });
+
+    await prisma.employee.update({ where: { id: employeeId }, data: { isActive: true } });
+    res.json({ message: 'Pracownik został przywrócony do aktywnych.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd przywracania pracownika.' });
   }
 });
 

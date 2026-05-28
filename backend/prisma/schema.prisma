@@ -28,6 +28,7 @@ model Employee {
   firstName String
   lastName  String
   role      String
+  isActive  Boolean       @default(true)
   login     String        @unique
   password  String
   phone     String?       

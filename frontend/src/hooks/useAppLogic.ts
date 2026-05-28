@@ -229,7 +229,25 @@ export const useAppLogic = () => {
 
   const fetchAllReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/employee/reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setAllReservations(await res.json()); } catch (e) { console.error(e); } };
   const fetchDeliveries = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/deliveries', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setDeliveries(await res.json()); } catch (e) { console.error(e); } };
-  const fetchEmployees = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/employees', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setEmployees(await res.json()); } catch (e) { console.error(e); } };
+  const fetchEmployees = async (token: string) => {
+    try {
+      const res = await fetch('http://localhost:5000/api/owner/employees', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = (await res.json()) as Array<Employee & { isActive?: boolean | null }>;
+        setEmployees(
+          data.map((employee) => ({
+            ...employee,
+            // Backward compatibility for responses without isActive.
+            isActive: employee.isActive !== false,
+          }))
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
   const fetchCustomers = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/customers', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setCustomers(await res.json()); } catch (e) { console.error(e); } };
   const fetchLoyaltyConfig = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/loyalty-config', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setLoyaltyConfig(await res.json()); } catch (e) { console.error(e); } };
   const fetchMonitoring = async () => { const token = localStorage.getItem('token'); if (!token) return; try { const res = await fetch('http://localhost:5000/api/monitoring', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setMonitoringData(await res.json()); } catch (e) { console.error(e); } };
@@ -510,6 +528,45 @@ export const useAppLogic = () => {
       setMessage('❌ Błąd połączenia z serwerem!');
     }
   };
+  const handleArchiveEmployee = async (id: number) => {
+    if (!window.confirm('Przenieść pracownika do archiwum?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}/archive`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('✅ ' + (data.message || 'Pracownik zarchiwizowany.'));
+        if (token) fetchEmployees(token);
+      } else {
+        setMessage('❌ ' + (data.error || 'Nie udało się zarchiwizować pracownika.'));
+      }
+    } catch (e) {
+      console.error(e);
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
+  const handleRestoreEmployee = async (id: number) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}/restore`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('✅ ' + (data.message || 'Pracownik przywrócony.'));
+        if (token) fetchEmployees(token);
+      } else {
+        setMessage('❌ ' + (data.error || 'Nie udało się przywrócić pracownika.'));
+      }
+    } catch (e) {
+      console.error(e);
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
   const handleDeleteEmployee = async (id: number) => {
     if (!window.confirm('Usunąć?')) return;
     const token = localStorage.getItem('token');
@@ -585,6 +642,6 @@ export const useAppLogic = () => {
 
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
-  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, loyaltyConfig, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
+  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, loyaltyConfig, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
 export type AppLogic = ReturnType<typeof useAppLogic>;
