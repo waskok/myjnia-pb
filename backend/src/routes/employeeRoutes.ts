@@ -10,6 +10,15 @@ interface TokenPayload {
 }
 
 const router = Router();
+const SHIFT_RANGE_REGEX = /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/;
+
+function parseShiftRange(shift: string): { startTime: string; endTime: string } {
+  if (SHIFT_RANGE_REGEX.test(shift)) {
+    const [startTime = shift, endTime = shift] = shift.split('-');
+    return { startTime, endTime };
+  }
+  return { startTime: shift, endTime: shift };
+}
 
 // ==========================================
 // MODUŁ KASJERA (POS) I SPRZEDAŻY
@@ -171,9 +180,9 @@ router.get('/employee/schedule', async (req, res) => {
       year,
       month,
       schedules: schedules.map((entry) => ({
+        ...parseShiftRange(entry.shift),
         id: entry.id,
         date: formatDateOnly(entry.date),
-        startTime: entry.shift,
         employeeId: entry.employeeId,
         employee: entry.employee
       }))

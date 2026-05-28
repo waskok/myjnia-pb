@@ -13,6 +13,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     newEmployee, setNewEmployee, handleAddEmployee, employees, handleDeleteEmployee, customers,
     fetchMonitoring, monitoringData, scheduleYear, scheduleMonth, scheduleData,
     selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime,
+    scheduleEndTime, setScheduleEndTime,
     changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule,
     handleDeleteScheduleEntry, setSelectedScheduleDates,
   } = props;
@@ -267,6 +268,8 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
           setScheduleEmployeeId={setScheduleEmployeeId}
           scheduleStartTime={scheduleStartTime}
           setScheduleStartTime={setScheduleStartTime}
+          scheduleEndTime={scheduleEndTime}
+          setScheduleEndTime={setScheduleEndTime}
           employees={employees}
           changeScheduleMonth={changeScheduleMonth}
           handleScheduleMonthInput={handleScheduleMonthInput}

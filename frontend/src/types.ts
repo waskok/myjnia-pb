@@ -16,6 +16,7 @@ export interface ScheduleEntry {
   id: number;
   date: string;
   startTime: string;
+  endTime: string;
   employeeId: number;
   employee: Pick<Employee, 'id' | 'firstName' | 'lastName' | 'role'>;
 }

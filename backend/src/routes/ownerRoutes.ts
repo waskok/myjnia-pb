@@ -261,6 +261,20 @@ router.patch('/owner/fuels/:id/price', async (req, res) => {
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const SHIFT_RANGE_REGEX = /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/;
+
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+}
+
+function parseShiftRange(shift: string): { startTime: string; endTime: string } {
+  if (SHIFT_RANGE_REGEX.test(shift)) {
+    const [startTime = shift, endTime = shift] = shift.split('-');
+    return { startTime, endTime };
+  }
+  return { startTime: shift, endTime: shift };
+}
 
 function parseOwnerFromRequest(req: Request): TokenPayload | null {
   const authHeader = req.headers.authorization;
@@ -322,9 +336,9 @@ router.get('/owner/schedule', async (req, res) => {
       year,
       month,
       schedules: schedules.map((entry) => ({
+        ...parseShiftRange(entry.shift),
         id: entry.id,
         date: formatDateOnly(entry.date),
-        startTime: entry.shift,
         employeeId: entry.employeeId,
         employee: entry.employee
       }))
@@ -340,19 +354,28 @@ router.post('/owner/schedule', async (req, res) => {
     const owner = parseOwnerFromRequest(req);
     if (!owner) return res.status(403).json({ error: 'Brak uprawnień!' });
 
-    const { employeeId, startTime, dates } = req.body as {
+    const { employeeId, startTime, endTime, dates } = req.body as {
       employeeId?: number;
       startTime?: string;
+      endTime?: string;
       dates?: string[];
     };
 
-    if (!employeeId || !startTime || !Array.isArray(dates) || dates.length === 0) {
-      return res.status(400).json({ error: 'Wymagane pola: employeeId, startTime, dates (tablica dat).' });
+    if (!employeeId || !startTime || !endTime || !Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ error: 'Wymagane pola: employeeId, startTime, endTime, dates (tablica dat).' });
     }
 
     if (!TIME_REGEX.test(startTime)) {
       return res.status(400).json({ error: 'Godzina rozpoczęcia musi być w formacie HH:mm (np. 08:00).' });
     }
+    if (!TIME_REGEX.test(endTime)) {
+      return res.status(400).json({ error: 'Godzina zakończenia musi być w formacie HH:mm (np. 16:00).' });
+    }
+    if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
+      return res.status(400).json({ error: 'Godzina zakończenia musi być późniejsza niż rozpoczęcia.' });
+    }
+
+    const shiftRange = `${startTime}-${endTime}`;
 
     const employee = await prisma.employee.findFirst({
       where: { id: Number(employeeId), ownerId: owner.id }
@@ -385,7 +408,7 @@ router.post('/owner/schedule', async (req, res) => {
           saved.push(
             await tx.workSchedule.update({
               where: { id: existing.id },
-              data: { shift: startTime, ownerId: owner.id }
+              data: { shift: shiftRange, ownerId: owner.id }
             })
           );
         } else {
@@ -395,7 +418,7 @@ router.post('/owner/schedule', async (req, res) => {
                 employeeId: employee.id,
                 ownerId: owner.id,
                 date,
-                shift: startTime
+                shift: shiftRange
               }
             })
           );
@@ -407,9 +430,9 @@ router.post('/owner/schedule', async (req, res) => {
     res.status(201).json({
       message: `Zapisano grafik dla ${results.length} dni.`,
       schedules: results.map((entry) => ({
+        ...parseShiftRange(entry.shift),
         id: entry.id,
         date: formatDateOnly(entry.date),
-        startTime: entry.shift,
         employeeId: entry.employeeId
       }))
     });

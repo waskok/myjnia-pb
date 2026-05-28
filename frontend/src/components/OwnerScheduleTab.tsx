@@ -12,6 +12,8 @@ type ScheduleTabProps = Pick<
   | 'setScheduleEmployeeId'
   | 'scheduleStartTime'
   | 'setScheduleStartTime'
+  | 'scheduleEndTime'
+  | 'setScheduleEndTime'
   | 'employees'
   | 'changeScheduleMonth'
   | 'handleScheduleMonthInput'
@@ -30,6 +32,8 @@ export const OwnerScheduleTab: React.FC<ScheduleTabProps> = ({
   setScheduleEmployeeId,
   scheduleStartTime,
   setScheduleStartTime,
+  scheduleEndTime,
+  setScheduleEndTime,
   employees,
   changeScheduleMonth,
   handleScheduleMonthInput,
@@ -75,6 +79,16 @@ export const OwnerScheduleTab: React.FC<ScheduleTabProps> = ({
             className="input-field w-full"
             value={scheduleStartTime}
             onChange={(e) => setScheduleStartTime(e.target.value)}
+            required
+          />
+        </div>
+        <div className="schedule-form-field">
+          <label>Godzina zakończenia</label>
+          <input
+            type="time"
+            className="input-field w-full"
+            value={scheduleEndTime}
+            onChange={(e) => setScheduleEndTime(e.target.value)}
             required
           />
         </div>
