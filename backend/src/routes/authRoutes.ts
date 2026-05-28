@@ -5,6 +5,10 @@ import prisma from '../prismaClient.js';
 
 const router = Router();
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DIGITS_REGEX = /^\d+$/;
+const NAME_REGEX = /^[A-Za-zĄąĆćĘęŁłŃńÓóŚśŹźŻż\s-]+$/;
+
 // ==========================================
 // AUTORYZACJA KLIENTA
 // ==========================================
@@ -36,64 +40,107 @@ router.post('/register', async (req, res) => {
       regon?: string;
     };
 
-    if (!accountType || !address || !phone || !email || !password) {
+    const normalizedAccountType = (accountType || '').trim();
+    const normalizedFirstName = (firstName || '').trim();
+    const normalizedLastName = (lastName || '').trim();
+    const normalizedCompanyName = (companyName || '').trim();
+    const normalizedAddress = (address || '').trim();
+    const normalizedPhone = (phone || '').replace(/\D/g, '');
+    const normalizedEmail = (email || '').trim();
+    const normalizedPassword = (password || '').trim();
+    const normalizedPesel = (pesel || '').trim();
+    const normalizedNip = (nip || '').trim();
+    const normalizedRegon = (regon || '').trim();
+
+    if (!normalizedAccountType || !normalizedAddress || !normalizedPhone || !normalizedEmail || !normalizedPassword) {
       return res.status(400).json({ error: 'Wypełnij wszystkie wymagane pola!' });
     }
 
-    if (accountType !== 'individual' && accountType !== 'company') {
+    if (normalizedAccountType !== 'individual' && normalizedAccountType !== 'company') {
       return res.status(400).json({ error: 'Nieprawidłowy typ konta.' });
     }
 
-    if (accountType === 'individual') {
-      if (!firstName || !lastName || !pesel) {
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Podaj poprawny adres e-mail (musi zawierać znak @).' });
+    }
+    if (!DIGITS_REGEX.test(normalizedPhone) || normalizedPhone.length !== 9) {
+      return res.status(400).json({ error: 'Numer telefonu musi mieć dokładnie 9 cyfr.' });
+    }
+    if (normalizedAddress.length < 6) {
+      return res.status(400).json({ error: 'Adres jest zbyt krótki (minimum 6 znaków).' });
+    }
+    if (normalizedPassword.length < 6) {
+      return res.status(400).json({ error: 'Hasło musi mieć minimum 6 znaków.' });
+    }
+
+    if (normalizedAccountType === 'individual') {
+      if (!normalizedFirstName || !normalizedLastName || !normalizedPesel) {
         return res.status(400).json({ error: 'Dla osoby fizycznej podaj imię, nazwisko i PESEL.' });
       }
+      if (!NAME_REGEX.test(normalizedFirstName) || !NAME_REGEX.test(normalizedLastName)) {
+        return res.status(400).json({ error: 'Imię i nazwisko mogą zawierać wyłącznie litery.' });
+      }
+      if (!DIGITS_REGEX.test(normalizedPesel) || normalizedPesel.length !== 11) {
+        return res.status(400).json({ error: 'PESEL musi mieć dokładnie 11 cyfr.' });
+      }
+      if (normalizedNip && (!DIGITS_REGEX.test(normalizedNip) || normalizedNip.length !== 10)) {
+        return res.status(400).json({ error: 'NIP musi mieć dokładnie 10 cyfr.' });
+      }
     } else {
-      if (!companyName || !nip || !regon) {
+      if (!normalizedCompanyName || !normalizedNip || !normalizedRegon) {
         return res.status(400).json({ error: 'Dla firmy podaj nazwę firmy, NIP i REGON.' });
+      }
+      if (normalizedCompanyName.length < 3) {
+        return res.status(400).json({ error: 'Nazwa firmy musi mieć minimum 3 znaki.' });
+      }
+      if (!DIGITS_REGEX.test(normalizedNip) || normalizedNip.length !== 10) {
+        return res.status(400).json({ error: 'NIP musi mieć dokładnie 10 cyfr.' });
+      }
+      if (!DIGITS_REGEX.test(normalizedRegon) || (normalizedRegon.length !== 9 && normalizedRegon.length !== 14)) {
+        return res.status(400).json({ error: 'REGON musi mieć 9 albo 14 cyfr.' });
       }
     }
 
-    const existingUser = await prisma.customer.findUnique({ where: { email } });
+    const existingUser = await prisma.customer.findUnique({ where: { email: normalizedEmail } });
     if (existingUser) {
       return res.status(400).json({ error: 'Użytkownik o podanym adresie e-mail już istnieje!' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
 
     const customerFirstName =
-      accountType === 'company' ? companyName!.trim() : firstName!.trim();
+      normalizedAccountType === 'company' ? normalizedCompanyName : normalizedFirstName;
     const customerLastName =
-      accountType === 'company' ? '—' : lastName!.trim();
+      normalizedAccountType === 'company' ? '—' : normalizedLastName;
 
     await prisma.$transaction(async (tx) => {
       const customer = await tx.customer.create({
         data: {
           firstName: customerFirstName,
           lastName: customerLastName,
-          address: address.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
+          address: normalizedAddress,
+          phone: normalizedPhone,
+          email: normalizedEmail,
           password: hashedPassword,
           registered: true,
         },
       });
 
-      if (accountType === 'individual') {
+      if (normalizedAccountType === 'individual') {
         await tx.individualCustomer.create({
           data: {
             customerId: customer.id,
-            pesel: pesel!.trim(),
-            nip: nip?.trim() || null,
+            pesel: normalizedPesel,
+            nip: normalizedNip || null,
           },
         });
       } else {
         await tx.companyCustomer.create({
           data: {
             customerId: customer.id,
-            companyName: companyName!.trim(),
-            nip: nip!.trim(),
-            regon: regon!.trim(),
+            companyName: normalizedCompanyName,
+            nip: normalizedNip,
+            regon: normalizedRegon,
           },
         });
       }

@@ -9,6 +9,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
   const {
     activeTab, reportPeriod, setReportPeriod, reportDateStr,
     handleDateChange, fetchReports, reportData, fuels, newPrice, setNewPrice, handleUpdatePrice,
+    services, newServicePrice, setNewServicePrice, handleUpdateServicePrice,
     loyaltyConfig, handleLoyaltyConfigChange, handleSaveLoyaltyConfig,
     newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery,
     newEmployee, setNewEmployee, handleAddEmployee, employees, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, customers,
@@ -171,7 +172,8 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
       {activeTab === 'cennik' && (
         <>
           <div className="card">
-            <h3>Zarządzanie cenami paliw</h3>
+            <h3>Zarządzanie cenami</h3>
+            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Ceny paliw</h4>
             <div className="list-grid">
               {fuels.map(f => (
                 <article key={f.id} className="list-item card-like">
@@ -183,6 +185,22 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
                   <div className="row-actions">
                     <input type="number" step="0.01" className="input-field" value={newPrice[f.id] || ''} onChange={(e) => setNewPrice({ ...newPrice, [f.id]: parseFloat(e.target.value) })} />
                     <button onClick={() => handleUpdatePrice(f.id)} className="btn btn-success">Zmień</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <h4 style={{ margin: '16px 0 10px', color: '#334155' }}>Ceny usług myjni</h4>
+            <div className="list-grid">
+              {services.map(service => (
+                <article key={service.id} className="list-item card-like">
+                  <div>
+                    <p className="item-title">{service.type}</p>
+                    <p className="item-meta">Aktualna cena: {service.price.toFixed(2)} zł</p>
+                  </div>
+                  <div className="row-actions">
+                    <input type="number" step="0.01" className="input-field" value={newServicePrice[service.id] || ''} onChange={(e) => setNewServicePrice({ ...newServicePrice, [service.id]: parseFloat(e.target.value) })} />
+                    <button onClick={() => handleUpdateServicePrice(service.id)} className="btn btn-success">Zmień</button>
                   </div>
                 </article>
               ))}
@@ -317,7 +335,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
             {customers.map(c => (
               <article key={c.id} className="list-item card-like">
                 <div>
-                  <p className="item-title">{c.firstName} {c.lastName}</p>
+                  <p className="item-title">{c.lastName && c.lastName !== '—' ? `${c.firstName} ${c.lastName}` : c.firstName}</p>
                   <p className="item-meta">{c.email}</p>
                   <p className="item-meta">{c.phone}</p>
                 </div>

@@ -70,7 +70,9 @@ function parseShiftRange(shift: string): { startTime: string; endTime: string } 
 // ==========================================
 router.get('/fuels', async (req, res) => {
   try {
-    const fuels = await prisma.fuel.findMany();
+    const fuels = await prisma.fuel.findMany({
+      orderBy: { id: 'asc' }
+    });
     res.json(fuels);
   } catch (error) {
     res.status(500).json({ error: 'Błąd pobierania paliw' });

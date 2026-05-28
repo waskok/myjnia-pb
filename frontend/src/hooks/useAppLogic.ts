@@ -63,6 +63,7 @@ export const useAppLogic = () => {
     phone: '',
     email: '',
     password: '',
+    confirmPassword: '',
     pesel: '',
     nip: '',
     regon: '',
@@ -87,6 +88,7 @@ export const useAppLogic = () => {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [newDelivery, setNewDelivery] = useState({ fuelId: '', quantity: 1000, supplier: '', deliveryDate: '' });
   const [newPrice, setNewPrice] = useState<{ [key: number]: number }>({});
+  const [newServicePrice, setNewServicePrice] = useState<{ [key: number]: number }>({});
   const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig>({
     pointsPerE95: 100,
     pointsPerE98: 100,
@@ -236,8 +238,15 @@ export const useAppLogic = () => {
     doc.save(`${invoice.number.replace(/[\\/]/g, '-')}.pdf`);
   };
 
-  const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name === 'phone') {
+      const digitsOnly = value.replace(/\D/g, '').slice(0, 9);
+      setFormData({ ...formData, phone: digitsOnly });
+      return;
+    }
+    setFormData({ ...formData, [name]: value });
+  };
   const handleStaffChange = (e: React.ChangeEvent<HTMLInputElement>) => setStaffData({ ...staffData, [e.target.name]: e.target.value });
   const handleDeliveryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setNewDelivery({ ...newDelivery, [e.target.name]: e.target.value });
   const handlePosChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -419,8 +428,16 @@ export const useAppLogic = () => {
     setMessage('Logowanie...');
     const endpoint = loginMode === 'customer' ? (isLogin ? '/api/login' : '/api/register') : '/api/staff/login';
     const bodyData = loginMode === 'customer' ? formData : staffData;
+    if (loginMode === 'customer' && !isLogin && formData.password !== formData.confirmPassword) {
+      setMessage('❌ Hasła muszą być takie same.');
+      return;
+    }
     try {
-      const res = await fetch(`http://localhost:5000${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData) });
+      const payload =
+        loginMode === 'customer' && !isLogin
+          ? { ...formData, confirmPassword: undefined }
+          : bodyData;
+      const res = await fetch(`http://localhost:5000${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (res.ok) {
         if (loginMode === 'customer' && !isLogin) {
@@ -442,7 +459,7 @@ export const useAppLogic = () => {
           setEmployeeJobRole(resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : null);
           if (resolvedRole === 'owner') { 
             setActiveTab('cennik');
-            fetchFuels(); fetchDeliveries(data.token); fetchEmployees(data.token); fetchCustomers(data.token); fetchLoyaltyConfig(data.token);
+            fetchFuels(); fetchServices(); fetchDeliveries(data.token); fetchEmployees(data.token); fetchCustomers(data.token); fetchLoyaltyConfig(data.token);
           } else if (resolvedRole === 'employee') { 
             const role = data.user.jobRole as EmployeeJobRole;
             if (role === 'Kasjer') {
@@ -470,6 +487,7 @@ export const useAppLogic = () => {
             phone: '',
             email: formData.email,
             password: '',
+            confirmPassword: '',
             pesel: '',
             nip: '',
             regon: '',
@@ -534,6 +552,29 @@ export const useAppLogic = () => {
   };
   const handleCompleteDelivery = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/deliveries/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Odebrano!'); fetchDeliveries(token); fetchFuels(); } } catch (e) { console.error(e); } };
   const handleUpdatePrice = async (id: number) => { if (!newPrice[id]) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/fuels/${id}/price`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ price: newPrice[id] }) }); if (res.ok) { setMessage('✅ Zmieniono!'); fetchFuels(); setNewPrice({ ...newPrice, [id]: 0 }); } } catch (e) { console.error(e); } };
+  const handleUpdateServicePrice = async (id: number) => {
+    if (!newServicePrice[id]) return;
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch(`http://localhost:5000/api/owner/services/${id}/price`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ price: newServicePrice[id] })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('✅ ' + (data.message || 'Zmieniono cenę usługi.'));
+        fetchServices();
+        setNewServicePrice({ ...newServicePrice, [id]: 0 });
+      } else {
+        setMessage('❌ ' + (data.error || 'Nie udało się zmienić ceny usługi.'));
+      }
+    } catch (e) {
+      console.error(e);
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
   const handleLoyaltyConfigChange = (key: keyof LoyaltyConfig, value: number) => {
     setLoyaltyConfig((prev) => ({ ...prev, [key]: value }));
   };
@@ -686,6 +727,7 @@ export const useAppLogic = () => {
       if (session.role === 'owner') {
         setActiveTab('cennik');
         fetchFuels();
+        fetchServices();
         fetchDeliveries(token);
         fetchEmployees(token);
         fetchCustomers(token);
@@ -727,6 +769,6 @@ export const useAppLogic = () => {
 
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
-  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, loyaltyConfig, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
+  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
 export type AppLogic = ReturnType<typeof useAppLogic>;

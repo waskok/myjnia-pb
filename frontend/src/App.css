@@ -215,6 +215,34 @@ html, body, #root {
   box-shadow: 0 0 0 3px rgb(37 99 235 / 0.16);
 }
 
+.phone-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid #bfd0e6;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  overflow: hidden;
+}
+
+.phone-prefix {
+  color: #94a3b8;
+  font-size: 0.92rem;
+  padding: 0 10px;
+  border-right: 1px solid #dbe4f0;
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.phone-input {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  flex: 1;
+}
+
+.phone-input:focus {
+  box-shadow: none;
+}
+
 .btn {
   border: none;
   border-radius: 10px;
