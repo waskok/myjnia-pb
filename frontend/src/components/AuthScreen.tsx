@@ -7,29 +7,20 @@ export const AuthScreen: React.FC<AppLogic> = (props) => {
 
   return (
     <div className={`login-container ${!isLogin && loginMode === 'customer' ? 'login-container-register' : ''}`}>
-      <div className="flex-space-around">
-        <button onClick={() => setLoginMode('customer')} className={`btn-tab ${loginMode === 'customer' ? 'btn-primary' : 'btn-light'}`}>Strefa Klienta</button>
-        <button onClick={() => setLoginMode('staff')} className={`btn-tab ${loginMode === 'staff' ? 'btn-dark' : 'btn-light'}`}>Strefa Służbowa</button>
-      </div>
-
       {loginMode === 'staff' ? (
-        <form onSubmit={handleAuthSubmit} className="flex-col-sm mt-20">
-          <h2>Logowanie Służbowe</h2>
+        <form onSubmit={handleAuthSubmit} className="flex-col-sm">
+          <h2>Logowanie służbowe</h2>
           <input name="login" className="input-field" placeholder="Login pracownika lub właściciela" value={staffData.login} onChange={handleStaffChange} required />
           <input name="password" type="password" className="input-field" placeholder="Hasło" value={staffData.password} onChange={handleStaffChange} required />
           <button type="submit" className="btn btn-dark">Zaloguj do systemu</button>
         </form>
       ) : (
         <>
-          <div className="flex-space-around mt-20">
-            <button onClick={() => setIsLogin(true)} className={`btn-tab ${isLogin ? 'btn-success' : 'btn-light'}`}>Logowanie</button>
-            <button onClick={() => setIsLogin(false)} className={`btn-tab ${!isLogin ? 'btn-success' : 'btn-light'}`}>Rejestracja</button>
-          </div>
           <h2>{isLogin ? 'Zaloguj się' : 'Zarejestruj się'}</h2>
           <form onSubmit={handleAuthSubmit} className="flex-col-sm">
             {!isLogin && (
               <>
-                <label className="text-left" style={{ fontWeight: 'bold', fontSize: '14px' }}>Typ konta</label>
+                <label className="text-left form-label">Typ konta</label>
                 <select
                   name="accountType"
                   className="select-field w-full"
@@ -63,7 +54,17 @@ export const AuthScreen: React.FC<AppLogic> = (props) => {
             <input name="password" type="password" className="input-field" placeholder="Hasło" value={formData.password} onChange={handleCustomerChange} required />
             <button type="submit" className="btn btn-success">{isLogin ? 'Zaloguj' : 'Załóż konto'}</button>
           </form>
+          {isLogin ? (
+            <button type="button" className="link-btn" onClick={() => setIsLogin(false)}>Nie masz konta? Zarejestruj się</button>
+          ) : (
+            <button type="button" className="link-btn" onClick={() => setIsLogin(true)}>Powrót do logowania</button>
+          )}
         </>
+      )}
+      {loginMode === 'staff' && (
+        <button type="button" className="link-btn" onClick={() => setLoginMode('customer')}>
+          Przejdź do strefy klienta
+        </button>
       )}
     </div>
   );

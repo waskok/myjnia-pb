@@ -5,9 +5,9 @@ import { ScheduleCalendar } from './ScheduleCalendar';
 
 export const EmployeePanel: React.FC<AppLogic> = (props) => {
   const {
-    loggedInUser, logout, activeEmpTab, setActiveEmpTab, fetchMonitoring, fetchSchedule,
+    activeEmpTab, fetchMonitoring,
     scheduleYear, scheduleMonth, scheduleData, changeScheduleMonth, handleScheduleMonthInput,
-    posCustomerQuery, setPosCustomerQuery, handleVerifyCustomer, posVerifiedCustomer, setPosData,
+    posCustomerQuery, setPosCustomerQuery, handleVerifyCustomer, posVerifiedCustomer,
     posData, handlePOSSubmit, fuels, handlePosChange, empResDateFilter, setEmpResDateFilter,
     empResPhoneFilter, setEmpResPhoneFilter, allReservations, getStatusColor,
     handleCompleteReservation, handleCancelReservation, monitoringData,
@@ -20,34 +20,17 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
   const canAffordWithPoints = posVerifiedCustomer && posVerifiedCustomer.loyaltyPoints >= costPoints;
 
   return (
-    <div className={`app-container ${activeEmpTab === 'grafik' ? 'app-container-wide' : ''}`}>
-      <div className="header-bar">
-        <h2 style={{ margin: 0 }}>Witaj, {loggedInUser}! (Panel Pracownika) 👨‍🔧</h2>
-        <button onClick={logout} className="btn btn-danger">Wyloguj się</button>
-      </div>
-
-      <div className="tabs-container">
-        <button onClick={() => setActiveEmpTab('pos')} className={`tab-btn-large ${activeEmpTab === 'pos' ? 'tab-active-primary' : 'tab-inactive'}`}>⛽ Kasa POS</button>
-        <button onClick={() => setActiveEmpTab('rezerwacje')} className={`tab-btn-large ${activeEmpTab === 'rezerwacje' ? 'tab-active-primary' : 'tab-inactive'}`}>🧼 Rezerwacje</button>
-        <button
-          onClick={() => { setActiveEmpTab('grafik'); fetchSchedule(); }}
-          className={`tab-btn-large ${activeEmpTab === 'grafik' ? 'tab-active-primary' : 'tab-inactive'}`}
-        >
-          📅 Grafik
-        </button>
-        <button onClick={() => { setActiveEmpTab('monitoring'); fetchMonitoring(); }} className={`tab-btn-large ${activeEmpTab === 'monitoring' ? 'tab-active-primary' : 'tab-inactive'}`}>📡 Monitoring</button>
-      </div>
+    <div className="panel-content">
 
       {activeEmpTab === 'pos' && (
         <div className="card">
           <h3>Kasa Fiskalna (Sprzedaż Paliwa)</h3>
-          <div className="flex-row mb-15" style={{ alignItems: 'flex-end' }}>
+          <div className="filter-box mb-15">
              <div style={{ flex: 1 }}>
-               <label>1. Skanuj klienta (E-mail lub Telefon):</label>
+               <label>🔎 1. Skanuj klienta (E-mail lub Telefon):</label>
                <input type="text" className="input-field w-full" value={posCustomerQuery} onChange={e => setPosCustomerQuery(e.target.value)} placeholder="Wpisz dane i kliknij Sprawdź..." />
              </div>
-             <button type="button" onClick={handleVerifyCustomer} className="btn btn-dark">Sprawdź</button>
-             <button type="button" onClick={() => { setPosData({...posData, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false}); setPosCustomerQuery(''); }} className="btn btn-light">Pomiń</button>
+             <button type="button" onClick={handleVerifyCustomer} className="btn btn-dark btn-compact">Sprawdź</button>
           </div>
 
           {posVerifiedCustomer && (
@@ -103,23 +86,23 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
           </div>
 
           {allReservations.length === 0 ? <p>Brak rezerwacji w systemie.</p> : (
-            <ul className="list-unstyled">
+            <ul className="list-unstyled list-grid">
               {allReservations.filter(res => {
                 const matchDate = empResDateFilter ? new Date(res.date).toISOString().substring(0, 10) === empResDateFilter : true;
                 const matchPhone = empResPhoneFilter ? (res.customer?.phone || '').includes(empResPhoneFilter) : true;
                 return matchDate && matchPhone;
               }).map((res) => (
-                <li key={res.id} className="list-item">
+                <li key={res.id} className="list-item card-like">
                   <div>
-                    <strong style={{ fontSize: '16px' }}>{new Date(res.date).toLocaleString()}</strong> <br/> 
-                    <span className="text-muted">Klient:</span> {res.customer ? `${res.customer.firstName} ${res.customer.lastName} (Tel: ${res.customer.phone})` : 'Brak danych'} <br/>
-                    <span className="text-muted">Usługa:</span> {res.washService.type} <br/> 
-                    <span className="text-muted">Status:</span> <b style={{ color: getStatusColor(res.status) }}>{res.status}</b>
+                    <p className="item-title">{new Date(res.date).toLocaleString()}</p>
+                    <p className="item-meta">Klient: {res.customer ? `${res.customer.firstName} ${res.customer.lastName} (Tel: ${res.customer.phone})` : 'Brak danych'}</p>
+                    <p className="item-meta">Usługa: {res.washService.type}</p>
+                    <span className="status-badge badge-warning" style={{ color: getStatusColor(res.status) }}>{res.status}</span>
                   </div>
                   {res.status === 'Oczekująca' && (
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <button onClick={() => handleCompleteReservation(res.id)} className="btn btn-success">Zakończ</button>
-                      <button onClick={() => handleCancelReservation(res.id)} className="btn btn-danger">Anuluj</button>
+                    <div className="row-actions">
+                      <button onClick={() => handleCompleteReservation(res.id)} className="btn btn-success">✅ Zakończ</button>
+                      <button onClick={() => handleCancelReservation(res.id)} className="btn btn-danger">❌ Anuluj</button>
                     </div>
                   )}
                 </li>

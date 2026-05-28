@@ -73,7 +73,7 @@ export const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
 
   return (
     <>
-      <div className="flex-space-between mb-20" style={{ flexWrap: 'wrap', gap: '12px' }}>
+      <div className="schedule-toolbar mb-20">
         <h3 style={{ margin: 0 }}>{title}</h3>
         <div className="schedule-nav">
           <button type="button" className="btn btn-light" onClick={() => changeScheduleMonth(-1)}>
