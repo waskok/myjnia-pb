@@ -28,6 +28,9 @@ router.post('/reservations', async (req, res) => {
     if (!token || !washServiceId || !date) return res.status(400).json({ error: 'Brakujące dane rezerwacji!' });
 
     const reservationDate = new Date(date);
+    if (Number.isNaN(reservationDate.getTime())) {
+      return res.status(400).json({ error: 'Nieprawidłowa data rezerwacji!' });
+    }
     if (reservationDate < new Date()) {
       return res.status(400).json({ error: 'Nie można rezerwować terminów w przeszłości!' });
     }

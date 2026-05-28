@@ -453,9 +453,16 @@ router.post('/owner/deliveries', async (req, res) => {
 
     const { fuelId, quantity, supplier, deliveryDate } = req.body;
     if (!fuelId || !quantity || !supplier || !deliveryDate) return res.status(400).json({ error: 'Brakujące dane dostawy!' });
+    const parsedDeliveryDate = new Date(deliveryDate);
+    if (Number.isNaN(parsedDeliveryDate.getTime())) {
+      return res.status(400).json({ error: 'Nieprawidłowa data dostawy.' });
+    }
+    if (parsedDeliveryDate.getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Nie można zlecić dostawy na datę z przeszłości.' });
+    }
 
     await prisma.fuelDelivery.create({
-      data: { fuelId: Number(fuelId), ownerId: decoded.id, quantity: Number(quantity), supplier: supplier, deliveryDate: new Date(deliveryDate), status: 'Zlecona' }
+      data: { fuelId: Number(fuelId), ownerId: decoded.id, quantity: Number(quantity), supplier: supplier, deliveryDate: parsedDeliveryDate, status: 'Zlecona' }
     });
     res.status(201).json({ message: 'Pomyślnie zlecono dostawę paliwa!' });
   } catch (error) {

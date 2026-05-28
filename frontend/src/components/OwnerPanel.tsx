@@ -17,6 +17,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     scheduleEndTime, setScheduleEndTime,
     changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule,
     handleDeleteScheduleEntry, setSelectedScheduleDates,
+    getMinDateTime,
   } = props;
   const [employeeListFilter, setEmployeeListFilter] = useState<'active' | 'archived' | 'all'>('active');
   const filteredEmployees = useMemo(() => {
@@ -257,6 +258,23 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
         <>
           <div className="card">
             <h3>Zarządzanie dostawami</h3>
+            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Aktualny stan paliw</h4>
+            <div className="grid-responsive mb-20">
+              {fuels.map((fuel) => {
+                const fillPercent = fuel.maxLevel > 0 ? (fuel.tankLevel / fuel.maxLevel) * 100 : 0;
+                const fillPercentLabel = fillPercent.toLocaleString('pl-PL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+                const isLow = fillPercent < 25;
+                return (
+                  <div key={fuel.id} className="data-box">
+                    <p className="item-title">{fuel.type}</p>
+                    <p className="item-meta">
+                      Stan: <span className={isLow ? 'text-danger' : ''}>{fuel.tankLevel} / {fuel.maxLevel} L</span>
+                    </p>
+                    <p className="item-meta">Zapełnienie: {fillPercentLabel}%</p>
+                  </div>
+                );
+              })}
+            </div>
             <form onSubmit={handleOrderDelivery} className="flex-row mb-20" style={{ alignItems: 'flex-end' }}>
               <div style={{ flex: 1 }}><label>Paliwo</label><select name="fuelId" className="select-field w-full" value={newDelivery.fuelId} onChange={handleDeliveryChange} required><option value="" disabled>Paliwo</option>{fuels.map(f => <option key={f.id} value={f.id}>{f.type}</option>)}</select></div>
               <div style={{ flex: 1 }}><label>Ilość (L)</label><input type="number" name="quantity" className="input-field w-full" value={newDelivery.quantity} onChange={handleDeliveryChange} required /></div>
@@ -271,7 +289,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
                   <option value="Poloil">Poloil</option>
                 </select>
               </div>
-              <div style={{ flex: 1 }}><label>Data</label><input type="datetime-local" name="deliveryDate" className="input-field w-full" value={newDelivery.deliveryDate} onChange={handleDeliveryChange} required /></div>
+              <div style={{ flex: 1 }}><label>Data</label><input type="datetime-local" name="deliveryDate" min={getMinDateTime()} className="input-field w-full" value={newDelivery.deliveryDate} onChange={handleDeliveryChange} required /></div>
               <button type="submit" className="btn btn-warning">Zleć dostawę</button>
             </form>
             

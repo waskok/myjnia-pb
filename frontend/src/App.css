@@ -62,6 +62,60 @@ html, body, #root {
   flex-wrap: wrap;
 }
 
+/* Top navigation tabs: text-like links with underline animation */
+.global-navbar-right .tab-btn-large {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(248, 250, 252, 0.82);
+  padding: 6px 2px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.1;
+  transform: scale(1);
+  transition: color 0.2s ease, transform 0.2s ease;
+  position: relative;
+}
+
+.global-navbar-right .tab-btn-large::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: #ffffff;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+
+.global-navbar-right .tab-btn-large:hover {
+  color: #ffffff;
+  transform: scale(1.04);
+}
+
+.global-navbar-right .tab-btn-large:hover::after {
+  transform: scaleX(1);
+}
+
+.global-navbar-right .tab-btn-large.tab-active-primary {
+  color: #ffffff;
+  background: transparent;
+  border-color: transparent;
+}
+
+.global-navbar-right .tab-btn-large.tab-active-primary::after {
+  transform: scaleX(1);
+}
+
+.global-navbar-right .tab-btn-large.tab-inactive {
+  color: rgba(248, 250, 252, 0.82);
+  background: transparent;
+  border-color: transparent;
+}
+
 .main-shell {
   width: min(1340px, 100%);
   margin: 0 auto;
