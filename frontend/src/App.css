@@ -69,6 +69,17 @@ html, body, #root {
   font-weight: 700;
 }
 
+.navbar-employee-inline {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.navbar-employee-inline strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
 .global-navbar-right {
   display: flex;
   align-items: center;

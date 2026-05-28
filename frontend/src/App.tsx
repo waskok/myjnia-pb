@@ -189,6 +189,11 @@ function App() {
                 Twoje punkty lojalnościowe: <strong>{appLogic.loyaltyPoints}</strong>
               </span>
             )}
+            {appLogic.userRole === 'employee' && appLogic.loggedInUser && (
+              <span className="navbar-employee-inline">
+                Zalogowano jako: <strong>{`${appLogic.loggedInUser} ${appLogic.loggedInUser.charAt(0)} - ${appLogic.employeeJobRole ?? 'Pracownik'}`}</strong>
+              </span>
+            )}
           </div>
           <div className="global-navbar-right">{rightButtons}</div>
         </div>
