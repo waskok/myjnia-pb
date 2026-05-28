@@ -43,7 +43,7 @@ export interface ScheduleCalendarProps {
 
 export const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
   readOnly = false,
-  title = 'Grafik pracowników 📅',
+  title = 'Grafik pracowników',
   hint,
   scheduleYear,
   scheduleMonth,
@@ -68,7 +68,7 @@ export const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
   const monthLabel = `${MONTH_NAMES[scheduleMonth - 1]} ${scheduleYear}`;
   const monthInputValue = `${scheduleYear}-${pad(scheduleMonth)}`;
   const defaultHint = readOnly
-    ? 'Podgląd grafiku całego zespołu — tylko do odczytu.'
+    ? 'Grafik pracowników.'
     : 'Kliknij dzień, aby go zaznaczyć (możesz wybrać wiele). Następnie wybierz pracownika, godziny i zapisz.';
 
   return (

@@ -132,72 +132,106 @@ export const useAppLogic = () => {
     return value.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, (char) => polishMap[char] ?? char);
   };
 
+  const formatMoney = (value: number) => `${value.toFixed(2)} PLN`;
+
   const downloadInvoicePdf = (invoice: GeneratedInvoice) => {
-    const doc = new jsPDF();
-    const margin = 14;
-    let y = 20;
+    const vatRatePercent = 23;
+    const vatRate = vatRatePercent / 100;
+    const grossValue = invoice.amount;
+    const netValue = grossValue / (1 + vatRate);
+    const vatValue = grossValue - netValue;
+    const unitGross = invoice.unitPrice;
+    const unitNet = unitGross / (1 + vatRate);
+    const unitVat = unitGross - unitNet;
+
+    const buyerIdentifiers: string[] = [];
+    if (invoice.buyer.identifiers.pesel) buyerIdentifiers.push(`PESEL: ${invoice.buyer.identifiers.pesel}`);
+    if (invoice.buyer.identifiers.nip) buyerIdentifiers.push(`NIP: ${invoice.buyer.identifiers.nip}`);
+    if (invoice.buyer.identifiers.regon) buyerIdentifiers.push(`REGON: ${invoice.buyer.identifiers.regon}`);
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const margin = 12;
+    let y = 16;
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.text('Faktura VAT', margin, y);
+    doc.text('FAKTURA VAT', margin, y);
     y += 8;
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.text(toPdfText(`Numer: ${invoice.number}`), margin, y);
-    y += 6;
+    y += 5;
     doc.text(toPdfText(`Data wystawienia: ${new Date(invoice.issueDate).toLocaleString('pl-PL')}`), margin, y);
-    y += 10;
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Sprzedawca:', margin, y);
-    y += 6;
-    doc.setFont('helvetica', 'normal');
-    doc.text('Myjnia PB', margin, y);
-    y += 6;
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Nabywca:', margin, y);
-    y += 6;
-    doc.setFont('helvetica', 'normal');
-    doc.text(toPdfText(invoice.buyer.name), margin, y);
-    y += 6;
-    doc.text(toPdfText(invoice.buyer.address), margin, y);
-    y += 6;
-    doc.text(toPdfText(`Email: ${invoice.buyer.email}`), margin, y);
-    y += 6;
-    doc.text(toPdfText(`Telefon: ${invoice.buyer.phone}`), margin, y);
-    y += 6;
-    if (invoice.buyer.identifiers.pesel) {
-      doc.text(`PESEL: ${invoice.buyer.identifiers.pesel}`, margin, y);
-      y += 6;
-    }
-    if (invoice.buyer.identifiers.nip) {
-      doc.text(`NIP: ${invoice.buyer.identifiers.nip}`, margin, y);
-      y += 6;
-    }
-    if (invoice.buyer.identifiers.regon) {
-      doc.text(`REGON: ${invoice.buyer.identifiers.regon}`, margin, y);
-      y += 6;
-    }
-
-    y += 4;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Pozycja:', margin, y);
-    y += 6;
-    doc.setFont('helvetica', 'normal');
-    doc.text(toPdfText(`Paliwo ${invoice.fuelType}`), margin, y);
-    y += 6;
-    doc.text(`Ilosc: ${invoice.quantity.toFixed(2)} L`, margin, y);
-    y += 6;
-    doc.text(`Cena jednostkowa: ${invoice.unitPrice.toFixed(2)} PLN`, margin, y);
-    y += 6;
-    doc.text(`Metoda platnosci: ${toPdfText(invoice.paymentMethod)}`, margin, y);
     y += 8;
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text(`Do zaplaty: ${invoice.amount.toFixed(2)} PLN`, margin, y);
+    doc.text(toPdfText('Sprzedawca:'), margin, y);
+    doc.text(toPdfText('Nabywca:'), 110, y);
+    y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    const sellerLines = [
+      'Myjnia PB',
+      toPdfText('ul. Jana Pawła II 37, 31-864 Kraków'),
+      'Telefon/fax: (070) 012-34-56, (070)-011-22-33',
+      'NIP: 123123123',
+      'REGON: 938274615',
+    ];
+    const buyerLines = [
+      toPdfText(invoice.buyer.name),
+      toPdfText(invoice.buyer.address),
+      toPdfText(`Email: ${invoice.buyer.email}`),
+      toPdfText(`Telefon: ${invoice.buyer.phone}`),
+      ...buyerIdentifiers.map((line) => toPdfText(line)),
+    ];
+
+    sellerLines.forEach((line, idx) => doc.text(line, margin, y + idx * 5));
+    buyerLines.forEach((line, idx) => doc.text(line, 110, y + idx * 5));
+    y += Math.max(sellerLines.length, buyerLines.length) * 5 + 6;
+
+    const tableX = margin;
+    const colWidths = [10, 56, 18, 30, 14, 28, 30];
+    const headers = ['Lp', 'Nazwa', 'Ilosc', 'Cena netto', 'VAT', 'Kwota VAT', 'Wartosc brutto'];
+    const row = [
+      '1',
+      toPdfText(`Paliwo ${invoice.fuelType}`),
+      `${invoice.quantity.toFixed(2)} L`,
+      formatMoney(unitNet * invoice.quantity),
+      `${vatRatePercent}%`,
+      formatMoney(unitVat * invoice.quantity),
+      formatMoney(grossValue),
+    ];
+
+    const drawRow = (startY: number, values: string[], bold = false) => {
+      let x = tableX;
+      const rowHeight = 8;
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      for (let i = 0; i < colWidths.length; i += 1) {
+        const width = colWidths[i] ?? 0;
+        const value = values[i] ?? '';
+        doc.rect(x, startY, width, rowHeight);
+        const align: 'left' | 'right' = i >= 2 ? 'right' : 'left';
+        doc.text(value, align === 'right' ? x + width - 1.5 : x + 1.5, startY + 5.2, { align });
+        x += width;
+      }
+      return startY + rowHeight;
+    };
+
+    y = drawRow(y, headers, true);
+    y = drawRow(y, row, false);
+    y += 8;
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(toPdfText(`Razem netto: ${formatMoney(netValue)}`), 128, y);
+    y += 5;
+    doc.text(toPdfText(`Razem VAT (${vatRatePercent}%): ${formatMoney(vatValue)}`), 128, y);
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.text(toPdfText(`Do zaplaty (brutto): ${formatMoney(grossValue)}`), 128, y);
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.text(toPdfText(`Metoda płatności: ${invoice.paymentMethod}`), 128, y);
 
     doc.save(`${invoice.number.replace(/[\\/]/g, '-')}.pdf`);
   };

@@ -151,7 +151,7 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
         <div className="card schedule-card text-left">
           <ScheduleCalendar
             readOnly
-            title="Grafik pracy (podgląd) 📅"
+            title="Grafik pracy"
             scheduleYear={scheduleYear}
             scheduleMonth={scheduleMonth}
             scheduleData={scheduleData}
