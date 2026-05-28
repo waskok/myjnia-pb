@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from 'react';
 import './App.css';
 import { useAppLogic } from './hooks/useAppLogic';
 import { AuthScreen } from './components/AuthScreen';
@@ -9,6 +10,20 @@ import heroImage from './assets/MyjniaPB.jpg';
 
 function App() {
   const appLogic = useAppLogic();
+  type EmployeeTab = 'pos' | 'rezerwacje' | 'monitoring' | 'lpg' | 'grafik';
+  const allowedEmployeeTabs = useMemo(() => {
+    if (appLogic.employeeJobRole === 'Kasjer') return ['pos', 'grafik'] as EmployeeTab[];
+    if (appLogic.employeeJobRole === 'Monitoring') return ['monitoring', 'grafik'] as EmployeeTab[];
+    if (appLogic.employeeJobRole === 'Obsługa Myjni') return ['rezerwacje', 'grafik'] as EmployeeTab[];
+    if (appLogic.employeeJobRole === 'Obsługa dystrybutora LPG') return ['lpg', 'grafik'] as EmployeeTab[];
+    return ['grafik'] as EmployeeTab[];
+  }, [appLogic.employeeJobRole]);
+
+  useEffect(() => {
+    if (appLogic.userRole !== 'employee') return;
+    if (allowedEmployeeTabs.includes(appLogic.activeEmpTab)) return;
+    appLogic.setActiveEmpTab(allowedEmployeeTabs[0]);
+  }, [appLogic.userRole, appLogic.activeEmpTab, appLogic.setActiveEmpTab, allowedEmployeeTabs]);
 
   let panel;
   if (appLogic.userRole === 'owner') {
@@ -64,8 +79,12 @@ function App() {
 
   const employeeButtons = (
     <>
-      <button type="button" className={`tab-btn-large ${appLogic.activeEmpTab === 'pos' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveEmpTab('pos')}>POS</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeEmpTab === 'rezerwacje' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveEmpTab('rezerwacje')}>Rezerwacje</button>
+      {allowedEmployeeTabs.includes('pos') && (
+        <button type="button" className={`tab-btn-large ${appLogic.activeEmpTab === 'pos' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveEmpTab('pos')}>Kasa</button>
+      )}
+      {allowedEmployeeTabs.includes('rezerwacje') && (
+        <button type="button" className={`tab-btn-large ${appLogic.activeEmpTab === 'rezerwacje' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveEmpTab('rezerwacje')}>Myjnia</button>
+      )}
       <button
         type="button"
         className={`tab-btn-large ${appLogic.activeEmpTab === 'grafik' ? 'tab-active-primary' : 'tab-inactive'}`}
@@ -76,16 +95,30 @@ function App() {
       >
         Grafik
       </button>
-      <button
-        type="button"
-        className={`tab-btn-large ${appLogic.activeEmpTab === 'monitoring' ? 'tab-active-primary' : 'tab-inactive'}`}
-        onClick={() => {
-          appLogic.setActiveEmpTab('monitoring');
-          appLogic.fetchMonitoring();
-        }}
-      >
-        Monitoring
-      </button>
+      {allowedEmployeeTabs.includes('monitoring') && (
+        <button
+          type="button"
+          className={`tab-btn-large ${appLogic.activeEmpTab === 'monitoring' ? 'tab-active-primary' : 'tab-inactive'}`}
+          onClick={() => {
+            appLogic.setActiveEmpTab('monitoring');
+            appLogic.fetchMonitoring();
+          }}
+        >
+          Monitoring
+        </button>
+      )}
+      {allowedEmployeeTabs.includes('lpg') && (
+        <button
+          type="button"
+          className={`tab-btn-large ${appLogic.activeEmpTab === 'lpg' ? 'tab-active-primary' : 'tab-inactive'}`}
+          onClick={() => {
+            appLogic.setActiveEmpTab('lpg');
+            appLogic.fetchMonitoring();
+          }}
+        >
+          Stan LPG
+        </button>
+      )}
       <button type="button" className="btn btn-danger" onClick={appLogic.logout}>Wyloguj</button>
     </>
   );

@@ -1,14 +1,23 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { WashService, Reservation, Transaction, Fuel, Customer, Delivery, Employee, MonitoringData, ReportData, ReportPeriodType, ActiveCustTab, ScheduleMonthData } from '../types';
+
+type EmployeeJobRole = 'Kasjer' | 'Monitoring' | 'Obsługa Myjni' | 'Obsługa dystrybutora LPG';
+type SessionRole = 'customer' | 'employee' | 'owner';
+type StoredSession = {
+  firstName: string;
+  role: SessionRole;
+  jobRole?: EmployeeJobRole;
+};
 
 export const useAppLogic = () => {
   const [message, setMessage] = useState('');
   const clearMessage = useCallback(() => setMessage(''), []);
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
+  const [employeeJobRole, setEmployeeJobRole] = useState<EmployeeJobRole | null>(null);
   
   const [activeTab, setActiveTab] = useState<'paliwa' | 'pracownicy' | 'klienci' | 'monitoring' | 'raporty' | 'grafik'>('paliwa');
-  const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring' | 'grafik'>('pos');
+  const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring' | 'lpg' | 'grafik'>('pos');
   const [activeCustTab, setActiveCustTab] = useState<ActiveCustTab>('book');
 
   const [empResDateFilter, setEmpResDateFilter] = useState('');
@@ -249,15 +258,35 @@ export const useAppLogic = () => {
       if (res.ok) {
         setMessage('✅ ' + data.message);
         if (loginMode !== 'customer' || isLogin) {
+          const resolvedRole = (data.user.role || 'customer') as SessionRole;
           localStorage.setItem('token', data.token);
+          const sessionPayload: StoredSession = {
+            firstName: data.user.firstName,
+            role: resolvedRole,
+            jobRole: resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : undefined
+          };
+          localStorage.setItem('sessionUser', JSON.stringify(sessionPayload));
           setLoggedInUser(data.user.firstName);
-          setUserRole(data.user.role || 'customer');
-          if (data.user.role === 'owner') { 
+          setUserRole(resolvedRole);
+          setEmployeeJobRole(resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : null);
+          if (resolvedRole === 'owner') { 
             setActiveTab('paliwa');
             fetchFuels(); fetchDeliveries(data.token); fetchEmployees(data.token); fetchCustomers(data.token);
-          } else if (data.user.role === 'employee') { 
-            setActiveEmpTab('pos');
-            fetchFuels(); fetchAllReservations(data.token); 
+          } else if (resolvedRole === 'employee') { 
+            const role = data.user.jobRole as EmployeeJobRole;
+            if (role === 'Kasjer') {
+              setActiveEmpTab('pos');
+              fetchFuels();
+            } else if (role === 'Monitoring') {
+              setActiveEmpTab('monitoring');
+              fetchMonitoring();
+            } else if (role === 'Obsługa dystrybutora LPG') {
+              setActiveEmpTab('lpg');
+              fetchMonitoring();
+            } else {
+              setActiveEmpTab('rezerwacje');
+              fetchAllReservations(data.token);
+            }
           } else { fetchCustomerData(data.token); }
         } else {
           setIsLogin(true);
@@ -288,7 +317,69 @@ export const useAppLogic = () => {
   const handleCompleteDelivery = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/deliveries/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Odebrano!'); fetchDeliveries(token); fetchFuels(); } } catch (e) { console.error(e); } };
   const handleUpdatePrice = async (id: number) => { if (!newPrice[id]) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/fuels/${id}/price`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ price: newPrice[id] }) }); if (res.ok) { setMessage('✅ Zmieniono!'); fetchFuels(); setNewPrice({ ...newPrice, [id]: 0 }); } } catch (e) { console.error(e); } };
   const handleAddEmployee = async (e: React.FormEvent) => { e.preventDefault(); const token = localStorage.getItem('token'); try { const res = await fetch('http://localhost:5000/api/owner/employees', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(newEmployee) }); if (res.ok) { setMessage('✅ Dodano!'); setNewEmployee({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' }); if(token) fetchEmployees(token); } else { const err = await res.json(); setMessage('❌ ' + err.error); } } catch (e) { console.error(e); } };
-  const handleDeleteEmployee = async (id: number) => { if (!window.confirm('Usunąć?')) return; const token = localStorage.getItem('token'); try { const res = await fetch(`http://localhost:5000/api/owner/employees/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { if(token) fetchEmployees(token); setMessage('✅ Usunięto.'); } } catch (e) { console.error(e); } };
+  const handleDeleteEmployee = async (id: number) => {
+    if (!window.confirm('Usunąć?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) {
+        if (token) fetchEmployees(token);
+        setMessage('✅ Usunięto.');
+      } else {
+        const err = await res.json();
+        setMessage('❌ ' + (err.error || 'Nie udało się usunąć pracownika.'));
+      }
+    } catch (e) {
+      console.error(e);
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const sessionRaw = localStorage.getItem('sessionUser');
+    if (!token || !sessionRaw) return;
+
+    try {
+      const session = JSON.parse(sessionRaw) as StoredSession;
+      if (!session.firstName || !session.role) return;
+
+      setLoggedInUser(session.firstName);
+      setUserRole(session.role);
+      setEmployeeJobRole(session.role === 'employee' ? (session.jobRole || null) : null);
+
+      if (session.role === 'owner') {
+        setActiveTab('paliwa');
+        fetchFuels();
+        fetchDeliveries(token);
+        fetchEmployees(token);
+        fetchCustomers(token);
+        } else if (session.role === 'employee') {
+        const role = session.jobRole;
+        if (role === 'Kasjer') {
+          setActiveEmpTab('pos');
+          fetchFuels();
+        } else if (role === 'Monitoring') {
+          setActiveEmpTab('monitoring');
+          fetchMonitoring();
+          } else if (role === 'Obsługa dystrybutora LPG') {
+            setActiveEmpTab('lpg');
+            fetchMonitoring();
+        } else if (role === 'Obsługa Myjni') {
+          setActiveEmpTab('rezerwacje');
+          fetchAllReservations(token);
+        } else {
+          setActiveEmpTab('grafik');
+        }
+      } else if (session.role === 'customer') {
+        fetchCustomerData(token);
+      }
+    } catch (error) {
+      console.error(error);
+      localStorage.removeItem('token');
+      localStorage.removeItem('sessionUser');
+    }
+  }, []);
 
   const handleDateChange = (val: string) => {
     let fullDate = val;
@@ -298,8 +389,8 @@ export const useAppLogic = () => {
     fetchReports(reportPeriod, fullDate);
   };
 
-  const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
+  const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
-  return { message, clearMessage, loggedInUser, userRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleAddEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
+  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleAddEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
 export type AppLogic = ReturnType<typeof useAppLogic>;

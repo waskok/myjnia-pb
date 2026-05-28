@@ -5,7 +5,7 @@ import { ScheduleCalendar } from './ScheduleCalendar';
 
 export const EmployeePanel: React.FC<AppLogic> = (props) => {
   const {
-    activeEmpTab, fetchMonitoring,
+    activeEmpTab, employeeJobRole, fetchMonitoring,
     scheduleYear, scheduleMonth, scheduleData, changeScheduleMonth, handleScheduleMonthInput,
     posCustomerQuery, setPosCustomerQuery, handleVerifyCustomer, posVerifiedCustomer,
     posData, handlePOSSubmit, fuels, handlePosChange, empResDateFilter, setEmpResDateFilter,
@@ -18,11 +18,17 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
   const pointsCostPerLiter = selectedFuel?.type === 'LPG' ? 50 : 100;
   const costPoints = Math.floor(posData.quantity) * pointsCostPerLiter;
   const canAffordWithPoints = posVerifiedCustomer && posVerifiedCustomer.loyaltyPoints >= costPoints;
+  const canViewPos = employeeJobRole === 'Kasjer';
+  const canViewMonitoring = employeeJobRole === 'Monitoring';
+  const canViewMyjnia = employeeJobRole === 'Obsługa Myjni';
+  const canViewLpg = employeeJobRole === 'Obsługa dystrybutora LPG';
+  const canViewSchedule = employeeJobRole === 'Kasjer' || employeeJobRole === 'Monitoring' || employeeJobRole === 'Obsługa Myjni' || employeeJobRole === 'Obsługa dystrybutora LPG';
+  const lpgFuel = monitoringData?.fuels.find((fuel) => fuel.type.toUpperCase().includes('LPG'));
 
   return (
     <div className="panel-content">
 
-      {activeEmpTab === 'pos' && (
+      {activeEmpTab === 'pos' && canViewPos && (
         <div className="card">
           <h3>Kasa Fiskalna (Sprzedaż Paliwa)</h3>
           <div className="filter-box mb-15">
@@ -68,9 +74,9 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
         </div>
       )}
 
-      {activeEmpTab === 'rezerwacje' && (
+      {activeEmpTab === 'rezerwacje' && canViewMyjnia && (
         <div className="card">
-          <h3>Rezerwacje myjni do obsłużenia</h3>
+          <h3>Myjnia - rezerwacje do obsłużenia</h3>
           <div className="filter-box mb-20">
             <div>
               <label>Wybierz dzień:</label>
@@ -112,7 +118,7 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
         </div>
       )}
 
-      {activeEmpTab === 'grafik' && (
+      {activeEmpTab === 'grafik' && canViewSchedule && (
         <div className="card schedule-card text-left">
           <ScheduleCalendar
             readOnly
@@ -126,7 +132,37 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
         </div>
       )}
 
-      {activeEmpTab === 'monitoring' && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}
+      {activeEmpTab === 'monitoring' && canViewMonitoring && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}
+
+      {activeEmpTab === 'lpg' && canViewLpg && (
+        <div className="card">
+          <div className="flex-space-between mb-20" style={{ alignItems: 'center' }}>
+            <h3 style={{ margin: 0 }}>Stan dystrybutora LPG</h3>
+            <button onClick={fetchMonitoring} className="btn btn-dark">Odśwież</button>
+          </div>
+
+          <div className="grid-responsive mb-20">
+            <div className="data-box text-center">
+              <h4 style={{ margin: 0, color: '#64748b' }}>Ciśnienie LPG</h4>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#0f172a' }}>
+                {monitoringData?.lpg.pressure ?? '--'} bar
+              </div>
+            </div>
+            <div className="data-box text-center">
+              <h4 style={{ margin: 0, color: '#64748b' }}>Temperatura LPG</h4>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#0284c7' }}>
+                {monitoringData?.lpg.temp ?? '--'} °C
+              </div>
+            </div>
+            <div className="data-box text-center">
+              <h4 style={{ margin: 0, color: '#64748b' }}>Poziom zbiornika LPG</h4>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#10b981' }}>
+                {lpgFuel ? `${lpgFuel.tankLevel} / ${lpgFuel.maxLevel} L` : '--'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

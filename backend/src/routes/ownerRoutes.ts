@@ -75,9 +75,29 @@ router.delete('/owner/employees/:id', async (req, res) => {
     const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
-    await prisma.employee.delete({ where: { id: Number(req.params.id) } });
+    const employeeId = Number(req.params.id);
+    if (!employeeId || Number.isNaN(employeeId)) {
+      return res.status(400).json({ error: 'Nieprawidłowe ID pracownika.' });
+    }
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, ownerId: decoded.id },
+      select: { id: true }
+    });
+    if (!employee) {
+      return res.status(404).json({ error: 'Nie znaleziono pracownika przypisanego do tego właściciela.' });
+    }
+
+    await prisma.employee.delete({ where: { id: employeeId } });
     res.json({ message: 'Pracownik został usunięty.' });
   } catch (error) {
+    const prismaError = error as { code?: string };
+    if (prismaError.code === 'P2003') {
+      return res.status(409).json({
+        error: 'Nie można usunąć pracownika, ponieważ ma powiązane transakcje. Oznacz konto jako nieaktywne lub przenieś historię.'
+      });
+    }
+    console.error(error);
     res.status(500).json({ error: 'Błąd podczas usuwania pracownika.' });
   }
 });
