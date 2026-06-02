@@ -82,9 +82,12 @@ export const useAuth = (setMessage: (msg: string) => void) => {
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('Logowanie...');
 
     if (loginMode === 'customer' && !isLogin) {
+      if (formData.password.length < 8) {
+        setMessage('❌ Hasło musi mieć minimum 8 znaków.');
+        return;
+      }
       if (formData.password !== formData.confirmPassword) {
         setMessage('❌ Hasła muszą być takie same.');
         return;
