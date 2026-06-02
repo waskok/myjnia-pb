@@ -46,8 +46,33 @@ function calculatePointsForItems(items: Array<{ product: string; quantity: numbe
 // ==========================================
 router.get('/services', async (req, res) => {
   try {
-    const services = await prisma.washService.findMany();
-    res.json(services);
+    const services = await prisma.washService.findMany({
+      where: {
+        OR: [
+          { type: { contains: 'standard', mode: 'insensitive' } },
+          { type: { contains: 'wosk', mode: 'insensitive' } }
+        ],
+        NOT: {
+          type: { contains: 'premium', mode: 'insensitive' }
+        }
+      },
+      orderBy: { id: 'asc' }
+    });
+
+    const normalizedServices = services.map((service) => {
+      const normalizedType = service.type.toUpperCase();
+      const isStandard = normalizedType.includes('STANDARD');
+      return {
+        ...service,
+        type: isStandard ? 'Mycie standardowe' : 'Mycie z woskowaniem',
+      };
+    }).sort((a, b) => {
+      if (a.type === b.type) return a.id - b.id;
+      if (a.type === 'Mycie standardowe') return -1;
+      return 1;
+    });
+
+    res.json(normalizedServices);
   } catch (error) {
     res.status(500).json({ error: 'Błąd pobierania usług' });
   }

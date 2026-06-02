@@ -13,7 +13,7 @@ async function main() {
       data: [
         { type: 'E95', pricePerLiter: 6.00, tankLevel: 5000, maxLevel: 10000 },
         { type: 'E98', pricePerLiter: 6.37, tankLevel: 5000, maxLevel: 10000 },
-        { type: 'Diesel', pricePerLiter: 6.83, tankLevel: 5000, maxLevel: 10000 },
+        { type: 'Olej napędowy ON', pricePerLiter: 6.83, tankLevel: 5000, maxLevel: 10000 },
         { type: 'LPG', pricePerLiter: 3.93, tankLevel: 2000, maxLevel: 5000 }
       ]
     });

@@ -20,6 +20,13 @@ type TimelineEntry = {
   temperature?: number;
 };
 
+type AlertEvaluation = {
+  status: 'OK' | 'Wysłano alert';
+  levelAlert: boolean;
+  pressureAlert: boolean;
+  temperatureAlert: boolean;
+};
+
 const buildTimeline = (
   levelPoints: MonitoringPoint[],
   pressurePoints: MonitoringPoint[],
@@ -50,6 +57,42 @@ const buildTimeline = (
     .reverse();
 };
 
+const toNumberOrNull = (value: number | string | null | undefined): number | null => {
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === 'string' ? Number(value.replace(',', '.')) : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const evaluateCardAlert = ({
+  level,
+  maxLevel,
+  pressure,
+  temperature,
+  isLpg,
+  config
+}: {
+  level: number | null;
+  maxLevel: number | null;
+  pressure: number | null;
+  temperature: number | null;
+  isLpg: boolean;
+  config?: MonitoringConfig;
+}): AlertEvaluation => {
+  const levelPercent = level !== null && maxLevel && maxLevel > 0 ? (level / maxLevel) * 100 : null;
+  const lowLevelThreshold = isLpg ? config?.lpgLowLevelPercent ?? 20 : config?.fuelLowLevelPercent ?? 20;
+  const pressureThreshold = isLpg ? config?.lpgMaxPressureBar ?? 14 : config?.fuelMaxPressureBar ?? 2.5;
+  const temperatureThreshold = isLpg ? config?.lpgMaxTempC ?? 30 : config?.fuelMaxTempC ?? 35;
+
+  const levelAlert = levelPercent !== null && levelPercent <= lowLevelThreshold;
+  const pressureAlert = pressure !== null && pressure >= pressureThreshold;
+  const temperatureAlert = temperature !== null && temperature >= temperatureThreshold;
+
+  if (levelAlert || pressureAlert || temperatureAlert) {
+    return { status: 'Wysłano alert', levelAlert, pressureAlert, temperatureAlert };
+  }
+  return { status: 'OK', levelAlert, pressureAlert, temperatureAlert };
+};
+
 export const MonitoringTab: React.FC<Props> = ({
   monitoringData,
   fetchMonitoring,
@@ -65,12 +108,16 @@ export const MonitoringTab: React.FC<Props> = ({
       key: tank.tank,
       title: tank.label,
       fuelLabel: tank.tank === 'ON' ? 'ON' : tank.tank,
+      isLpg: false,
+      maxLevel: tank.maxLevel ?? null,
       entries: buildTimeline(tank.history.level, tank.history.pressure, tank.history.temperature)
     })),
     {
       key: 'LPG',
       title: 'Zbiornik LPG',
       fuelLabel: 'LPG',
+      isLpg: true,
+      maxLevel: monitoringData?.lpg.maxLevel ?? null,
       entries: buildTimeline(
         monitoringData?.lpg.history?.level ?? [],
         monitoringData?.lpg.history?.pressure ?? [],
@@ -205,18 +252,58 @@ export const MonitoringTab: React.FC<Props> = ({
       <div className="grid-responsive mb-20">
         {fuelTanks.map((fuel, idx) => (
           <div key={fuel.id} className="data-box">
-            <h4 style={{ margin: '0 0 8px 0', color: '#475569' }}>Zbiornik {idx + 1}</h4>
-            <p className="item-meta" style={{ marginBottom: 6 }}><strong>Paliwo:</strong> {fuel.type}</p>
-            <p className="item-meta"><strong>Poziom:</strong> {fuel.tankLevel} / {fuel.maxLevel} L ({fuel.percentage ?? '--'}%)</p>
-            <p className="item-meta"><strong>Ciśnienie nad lustrem:</strong> {fuel.pressure !== null && fuel.pressure !== undefined ? `${Number(fuel.pressure).toFixed(2)} bar` : '--'}</p>
-            <p className="item-meta"><strong>Temperatura:</strong> {fuel.temperature !== null && fuel.temperature !== undefined ? `${Number(fuel.temperature).toFixed(2)} °C` : '--'}</p>
+            {(() => {
+              const currentAlert = evaluateCardAlert({
+                level: toNumberOrNull(fuel.tankLevel),
+                maxLevel: toNumberOrNull(fuel.maxLevel),
+                pressure: toNumberOrNull(fuel.pressure),
+                temperature: toNumberOrNull(fuel.temperature),
+                isLpg: false,
+                config: monitoringConfig
+              });
+              return (
+                <>
+                  <h4 style={{ margin: '0 0 8px 0', color: '#475569' }}>Zbiornik {idx + 1}</h4>
+                  <p className="item-meta" style={{ marginBottom: 6 }}><strong>Paliwo:</strong> {fuel.type}</p>
+                  <p className={`item-meta ${currentAlert.levelAlert ? 'text-danger' : ''}`}><strong>Poziom:</strong> {fuel.tankLevel} / {fuel.maxLevel} L ({fuel.percentage ?? '--'}%)</p>
+                  <p className={`item-meta ${currentAlert.pressureAlert ? 'text-danger' : ''}`}><strong>Ciśnienie nad lustrem:</strong> {fuel.pressure !== null && fuel.pressure !== undefined ? `${Number(fuel.pressure).toFixed(2)} bar` : '--'}</p>
+                  <p className={`item-meta ${currentAlert.temperatureAlert ? 'text-danger' : ''}`}><strong>Temperatura:</strong> {fuel.temperature !== null && fuel.temperature !== undefined ? `${Number(fuel.temperature).toFixed(2)} °C` : '--'}</p>
+                  <p className="item-meta" style={{ marginTop: 8 }}>
+                    <strong>Status:</strong>{' '}
+                    <span className={`status-badge ${currentAlert.status === 'OK' ? 'badge-success' : 'badge-danger'}`}>
+                      {currentAlert.status}
+                    </span>
+                  </p>
+                </>
+              );
+            })()}
           </div>
         ))}
         <div className="data-box">
-          <h4 style={{ margin: '0 0 8px 0', color: '#475569' }}>LPG</h4>
-          <p className="item-meta"><strong>Poziom LPG:</strong> {monitoringData?.lpg.level ?? '--'} / {monitoringData?.lpg.maxLevel ?? '--'} L ({monitoringData?.lpg.percentage ?? '--'}%)</p>
-          <p className="item-meta"><strong>Ciśnienie LPG:</strong> {monitoringData?.lpg.pressure !== null && monitoringData?.lpg.pressure !== undefined ? `${Number(monitoringData.lpg.pressure).toFixed(2)} bar` : '--'}</p>
-          <p className="item-meta"><strong>Temperatura LPG:</strong> {monitoringData?.lpg.temp !== null && monitoringData?.lpg.temp !== undefined ? `${Number(monitoringData.lpg.temp).toFixed(2)} °C` : '--'}</p>
+          {(() => {
+            const lpgAlert = evaluateCardAlert({
+              level: toNumberOrNull(monitoringData?.lpg.level),
+              maxLevel: toNumberOrNull(monitoringData?.lpg.maxLevel),
+              pressure: toNumberOrNull(monitoringData?.lpg.pressure),
+              temperature: toNumberOrNull(monitoringData?.lpg.temp),
+              isLpg: true,
+              config: monitoringConfig
+            });
+            return (
+              <>
+                <h4 style={{ margin: '0 0 8px 0', color: '#475569' }}>LPG</h4>
+                <p className={`item-meta ${lpgAlert.levelAlert ? 'text-danger' : ''}`}><strong>Poziom LPG:</strong> {monitoringData?.lpg.level ?? '--'} / {monitoringData?.lpg.maxLevel ?? '--'} L ({monitoringData?.lpg.percentage ?? '--'}%)</p>
+                <p className={`item-meta ${lpgAlert.pressureAlert ? 'text-danger' : ''}`}><strong>Ciśnienie LPG:</strong> {monitoringData?.lpg.pressure !== null && monitoringData?.lpg.pressure !== undefined ? `${Number(monitoringData.lpg.pressure).toFixed(2)} bar` : '--'}</p>
+                <p className={`item-meta ${lpgAlert.temperatureAlert ? 'text-danger' : ''}`}><strong>Temperatura LPG:</strong> {monitoringData?.lpg.temp !== null && monitoringData?.lpg.temp !== undefined ? `${Number(monitoringData.lpg.temp).toFixed(2)} °C` : '--'}</p>
+                <p className="item-meta" style={{ marginTop: 8 }}>
+                  <strong>Status:</strong>{' '}
+                  <span className={`status-badge ${lpgAlert.status === 'OK' ? 'badge-success' : 'badge-danger'}`}>
+                    {lpgAlert.status}
+                  </span>
+                </p>
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -232,10 +319,30 @@ export const MonitoringTab: React.FC<Props> = ({
               <div className="list-grid">
                 {column.entries.map((entry) => (
                   <div key={`${column.key}-${entry.timestamp}`} className="data-box" style={{ background: 'rgba(255,255,255,0.85)' }}>
-                    <p className="item-meta"><strong>Data/godzina:</strong> {toLabelTime(entry.timestamp)}</p>
-                    <p className="item-meta"><strong>Poziom:</strong> {entry.level !== undefined ? `${entry.level.toFixed(2)} L` : '--'}</p>
-                    <p className="item-meta"><strong>Ciśnienie:</strong> {entry.pressure !== undefined ? `${entry.pressure.toFixed(2)} bar` : '--'}</p>
-                    <p className="item-meta"><strong>Temperatura:</strong> {entry.temperature !== undefined ? `${entry.temperature.toFixed(2)} °C` : '--'}</p>
+                    {(() => {
+                      const entryAlert = evaluateCardAlert({
+                        level: toNumberOrNull(entry.level),
+                        maxLevel: toNumberOrNull(column.maxLevel),
+                        pressure: toNumberOrNull(entry.pressure),
+                        temperature: toNumberOrNull(entry.temperature),
+                        isLpg: column.isLpg,
+                        config: monitoringConfig
+                      });
+                      return (
+                        <>
+                          <p className="item-meta"><strong>Data/godzina:</strong> {toLabelTime(entry.timestamp)}</p>
+                          <p className={`item-meta ${entryAlert.levelAlert ? 'text-danger' : ''}`}><strong>Poziom:</strong> {entry.level !== undefined ? `${entry.level.toFixed(2)} L` : '--'}</p>
+                          <p className={`item-meta ${entryAlert.pressureAlert ? 'text-danger' : ''}`}><strong>Ciśnienie:</strong> {entry.pressure !== undefined ? `${entry.pressure.toFixed(2)} bar` : '--'}</p>
+                          <p className={`item-meta ${entryAlert.temperatureAlert ? 'text-danger' : ''}`}><strong>Temperatura:</strong> {entry.temperature !== undefined ? `${entry.temperature.toFixed(2)} °C` : '--'}</p>
+                          <p className="item-meta" style={{ marginTop: 8 }}>
+                            <strong>Status:</strong>{' '}
+                            <span className={`status-badge ${entryAlert.status === 'OK' ? 'badge-success' : 'badge-danger'}`}>
+                              {entryAlert.status}
+                            </span>
+                          </p>
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

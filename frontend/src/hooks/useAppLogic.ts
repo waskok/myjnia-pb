@@ -1,5 +1,22 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { WashService, Reservation, Transaction, Fuel, Customer, Delivery, Employee, MonitoringData, MonitoringConfig, ReportData, ReportPeriodType, ActiveCustTab, ScheduleMonthData } from '../types';
+import type {
+  WashService,
+  Reservation,
+  Transaction,
+  Fuel,
+  Customer,
+  Delivery,
+  Employee,
+  MonitoringData,
+  MonitoringConfig,
+  ReportData,
+  ReportPeriodType,
+  ActiveCustTab,
+  ScheduleMonthData,
+  WashReportData,
+  MonitoringReportData,
+  OwnerReportKind
+} from '../types';
 import { jsPDF } from 'jspdf';
 
 type EmployeeJobRole = 'Kasjer' | 'Monitoring' | 'Obsługa Myjni' | 'Obsługa dystrybutora LPG';
@@ -112,6 +129,8 @@ export const useAppLogic = () => {
   });
   
   const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [washReportData, setWashReportData] = useState<WashReportData | null>(null);
+  const [monitoringReportData, setMonitoringReportData] = useState<MonitoringReportData | null>(null);
   const [reportPeriod, setReportPeriod] = useState<ReportPeriodType>('all');
   const [reportDateStr, setReportDateStr] = useState<string>(new Date().toISOString().substring(0, 10));
 
@@ -493,6 +512,26 @@ export const useAppLogic = () => {
       if (res.ok) setReportData(await res.json());
     } catch (e) { console.error(e); }
   };
+  const fetchWashReports = async (period = reportPeriod, dateVal = reportDateStr) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      let url = 'http://localhost:5000/api/owner/reports/wash';
+      if (period !== 'all') url += `?period=${period}&date=${dateVal}`;
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) setWashReportData(await res.json());
+    } catch (e) { console.error(e); }
+  };
+  const fetchMonitoringReports = async (period = reportPeriod, dateVal = reportDateStr) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      let url = 'http://localhost:5000/api/owner/reports/monitoring';
+      if (period !== 'all') url += `?period=${period}&date=${dateVal}`;
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) setMonitoringReportData(await res.json());
+    } catch (e) { console.error(e); }
+  };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -830,16 +869,18 @@ export const useAppLogic = () => {
     }
   }, []);
 
-  const handleDateChange = (val: string) => {
+  const handleDateChange = (val: string, kind: OwnerReportKind = 'sales') => {
     let fullDate = val;
     if (val.length === 7) fullDate = `${val}-01`;
     if (val.length === 4) fullDate = `${val}-01-01`;
     setReportDateStr(fullDate);
-    fetchReports(reportPeriod, fullDate);
+    if (kind === 'sales') fetchReports(reportPeriod, fullDate);
+    if (kind === 'wash') fetchWashReports(reportPeriod, fullDate);
+    if (kind === 'monitoring') fetchMonitoringReports(reportPeriod, fullDate);
   };
 
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
-  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, employees, customers, newEmployee, setNewEmployee, monitoringData, monitoringConfig, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
+  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, employees, customers, newEmployee, setNewEmployee, monitoringData, monitoringConfig, reportData, washReportData, monitoringReportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchWashReports, fetchMonitoringReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
 export type AppLogic = ReturnType<typeof useAppLogic>;

@@ -51,6 +51,35 @@ export interface MonitoringData {
 export interface TransactionItem { id?: number; product: string; quantity: number; value: number; }
 export interface Transaction { id: number; totalAmount: number; date: string; paymentMethod: string; customer?: { firstName: string; lastName: string; }; employee: { firstName: string; lastName: string; }; items?: TransactionItem[]; pointsUsed?: number; pointsDelta?: number; }
 export interface ReportData { totalRevenue: number; totalCount: number; transactions: Transaction[]; }
+export interface WashReportEntry {
+  id: number;
+  date: string;
+  status: string;
+  serviceType: string;
+  servicePrice: number;
+  customer: { firstName: string; lastName: string } | null;
+}
+export interface WashReportData {
+  totalRevenue: number;
+  totalCount: number;
+  washes: WashReportEntry[];
+}
+export interface MonitoringReportEntry {
+  id: number;
+  tank: string;
+  tankLabel: string;
+  level: number | null;
+  pressure: number | null;
+  temperature: number | null;
+  alertStatus: 'Brak alertu' | 'Alert wysłany';
+  createdAt: string;
+}
+export interface MonitoringReportData {
+  totalReadings: number;
+  alertEvents: number;
+  readings: MonitoringReportEntry[];
+}
+export type OwnerReportKind = 'sales' | 'wash' | 'monitoring';
 
 export type ReportPeriodType = 'all' | 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type ActiveCustTab = 'book' | 'resHistory' | 'buyHistory' | 'contact';

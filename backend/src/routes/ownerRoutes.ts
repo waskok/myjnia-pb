@@ -331,6 +331,58 @@ router.patch('/owner/loyalty-config', async (req, res) => {
 // ==========================================
 // MODUŁ RAPORTÓW WŁAŚCICIELA
 // ==========================================
+function buildReportDateFilter(period?: unknown, date?: unknown): { date?: { gte: Date; lte: Date } } {
+  let dateFilter: { date?: { gte: Date; lte: Date } } = {};
+  if (!period || period === 'all' || !date) return dateFilter;
+
+  const targetDate = new Date(String(date));
+  if (Number.isNaN(targetDate.getTime())) return dateFilter;
+
+  const year = targetDate.getFullYear();
+  const month = targetDate.getMonth();
+  const day = targetDate.getDate();
+  let startDate: Date;
+  let endDate: Date;
+
+  if (period === 'daily') {
+    startDate = new Date(year, month, day, 0, 0, 0, 0);
+    endDate = new Date(year, month, day, 23, 59, 59, 999);
+  } else if (period === 'weekly') {
+    const dayOfWeek = targetDate.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(year, month, day + mondayOffset, 0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    startDate = monday;
+    endDate = sunday;
+  } else if (period === 'monthly') {
+    startDate = new Date(year, month, 1, 0, 0, 0, 0);
+    endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+  } else {
+    startDate = new Date(year, 0, 1, 0, 0, 0, 0);
+    endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+  }
+
+  dateFilter = {
+    date: {
+      gte: startDate,
+      lte: endDate
+    }
+  };
+  return dateFilter;
+}
+
+function buildOwnerDateWhere(
+  period?: unknown,
+  date?: unknown,
+  field: 'date' | 'createdAt' = 'date'
+): Record<string, { gte: Date; lte: Date }> {
+  const base = buildReportDateFilter(period, date);
+  if (!base.date) return {};
+  return { [field]: base.date };
+}
+
 router.get('/owner/reports', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -341,45 +393,7 @@ router.get('/owner/reports', async (req, res) => {
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
     const { period, date } = req.query;
-    
-    let dateFilter: { date?: { gte: Date; lte: Date } } = {};
-
-    if (period && period !== 'all' && date) {
-      const targetDate = new Date(date as string);
-      const year = targetDate.getFullYear();
-      const month = targetDate.getMonth();
-      const day = targetDate.getDate();
-
-      let startDate: Date;
-      let endDate: Date;
-
-      if (period === 'daily') {
-        startDate = new Date(year, month, day, 0, 0, 0);
-        endDate = new Date(year, month, day, 23, 59, 59, 999);
-      } else if (period === 'weekly') {
-        const dayOfWeek = targetDate.getDay();
-        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        const monday = new Date(year, month, day + mondayOffset, 0, 0, 0, 0);
-        const sunday = new Date(monday);
-        sunday.setDate(monday.getDate() + 6);
-        sunday.setHours(23, 59, 59, 999);
-        startDate = monday;
-        endDate = sunday;
-      } else if (period === 'monthly') {
-        startDate = new Date(year, month, 1, 0, 0, 0);
-        endDate = new Date(year, month + 1, 0, 23, 59, 59, 999); 
-      } else { 
-        startDate = new Date(year, 0, 1, 0, 0, 0);
-        endDate = new Date(year, 11, 31, 23, 59, 59, 999);
-      }
-
-      dateFilter = {
-        date: {
-          gte: startDate,
-          lte: endDate
-        }
-      };
-    }
+    const dateFilter = buildReportDateFilter(period, date);
 
     const revenueStats = await prisma.transaction.aggregate({
       _sum: { totalAmount: true },
@@ -426,6 +440,152 @@ router.get('/owner/reports', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd generowania raportów.' });
+  }
+});
+
+router.get('/owner/reports/wash', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const { period, date } = req.query;
+    const dateWhere = buildOwnerDateWhere(period, date, 'date');
+
+    const completedReservations = await prisma.reservation.findMany({
+      where: {
+        status: 'Zakończona',
+        ...dateWhere
+      },
+      orderBy: { date: 'desc' },
+      take: period === 'all' ? 50 : 200,
+      include: {
+        customer: { select: { firstName: true, lastName: true } },
+        washService: { select: { type: true, price: true } }
+      }
+    });
+
+    const totalRevenue = completedReservations.reduce((acc, item) => acc + (item.washService?.price ?? 0), 0);
+
+    res.json({
+      totalRevenue,
+      totalCount: completedReservations.length,
+      washes: completedReservations.map((entry) => ({
+        id: entry.id,
+        date: entry.date,
+        status: entry.status,
+        serviceType: entry.washService?.type ?? 'Nieznana usługa',
+        servicePrice: entry.washService?.price ?? 0,
+        customer: entry.customer
+          ? { firstName: entry.customer.firstName, lastName: entry.customer.lastName }
+          : null
+      }))
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd generowania raportu myjni.' });
+  }
+});
+
+router.get('/owner/reports/monitoring', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const { period, date } = req.query;
+    const createdAtWhere = buildOwnerDateWhere(period, date, 'createdAt');
+
+    const readings = await prisma.sensor.findMany({
+      where: {
+        tank: { not: 'CONFIG' },
+        ...createdAtWhere
+      },
+      orderBy: { createdAt: 'desc' },
+      take: period === 'all' ? 300 : 800
+    });
+
+    const tankLabelMap: Record<string, string> = {
+      E95: 'Zbiornik 1 (E95)',
+      E98: 'Zbiornik 2 (E98)',
+      ON: 'Zbiornik 3 (ON)',
+      LPG: 'Zbiornik LPG'
+    };
+
+    type Snapshot = {
+      id: number;
+      tank: string;
+      tankLabel: string;
+      createdAt: Date;
+      level: number | null;
+      pressure: number | null;
+      temperature: number | null;
+      alertSent: boolean;
+    };
+
+    const grouped = new Map<string, Snapshot>();
+    readings.forEach((item) => {
+      const bucket = new Date(item.createdAt);
+      bucket.setSeconds(0, 0);
+      const bucketKey = bucket.toISOString();
+      const key = `${item.tank}|${bucketKey}`;
+      const existing = grouped.get(key) ?? {
+        id: item.id,
+        tank: item.tank,
+        tankLabel: tankLabelMap[item.tank] ?? `Zbiornik ${item.tank}`,
+        createdAt: item.createdAt,
+        level: null,
+        pressure: null,
+        temperature: null,
+        alertSent: false
+      };
+
+      if (item.type === 'level') existing.level = item.value;
+      if (item.type === 'pressure') existing.pressure = item.value;
+      if (item.type === 'temperature') existing.temperature = item.value;
+
+      if (
+        item.status === 'AWARIA' ||
+        item.status === 'ERROR' ||
+        (item.type === 'safety_valve' && item.value >= 1)
+      ) {
+        existing.alertSent = true;
+      }
+
+      grouped.set(key, existing);
+    });
+
+    const snapshots = Array.from(grouped.values())
+      .sort((a, b) => {
+        const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        if (byDate !== 0) return byDate;
+        return a.tankLabel.localeCompare(b.tankLabel, 'pl');
+      })
+      .slice(0, period === 'all' ? 120 : 260);
+
+    const alertEvents = snapshots.filter((item) => item.alertSent).length;
+
+    res.json({
+      totalReadings: snapshots.length,
+      alertEvents,
+      readings: snapshots.map((item) => ({
+        id: item.id,
+        tank: item.tank,
+        tankLabel: item.tankLabel,
+        level: item.level,
+        pressure: item.pressure,
+        temperature: item.temperature,
+        alertStatus: item.alertSent ? 'Alert wysłany' : 'Brak alertu',
+        createdAt: item.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd generowania raportu monitoringu.' });
   }
 });
 

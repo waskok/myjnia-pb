@@ -95,6 +95,14 @@ function getFuelTankCode(type: string): 'E95' | 'E98' | 'ON' | 'LPG' {
   return 'E95';
 }
 
+function normalizeFuelDisplayName(type: string): string {
+  const normalized = type.toUpperCase();
+  if (normalized.includes('ON') || normalized.includes('DIESEL')) {
+    return 'Olej napędowy ON';
+  }
+  return type;
+}
+
 function numericOrNull(value: number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   return Number.isFinite(value) ? value : null;
@@ -241,7 +249,12 @@ router.get('/fuels', async (req, res) => {
     const fuels = await prisma.fuel.findMany({
       orderBy: { id: 'asc' }
     });
-    res.json(fuels);
+    res.json(
+      fuels.map((fuel) => ({
+        ...fuel,
+        type: normalizeFuelDisplayName(fuel.type)
+      }))
+    );
   } catch (error) {
     res.status(500).json({ error: 'Błąd pobierania paliw' });
   }
@@ -550,19 +563,21 @@ router.get('/monitoring', async (req, res) => {
     const fuelStatus = fuels.map((fuel) => {
       const tankCode = getFuelTankCode(fuel.type);
       const percentageNum = fuel.maxLevel > 0 ? (fuel.tankLevel / fuel.maxLevel) * 100 : 0;
+      const displayType = normalizeFuelDisplayName(fuel.type);
       if (tankCode !== 'LPG' && percentageNum < config.fuelLowLevelPercent) {
-        alerts.push(`Krytycznie niski poziom paliwa ${fuel.type} (${percentageNum.toFixed(1)}%).${ALERT_SUFFIX}`);
+        alerts.push(`Krytycznie niski poziom paliwa ${displayType} (${percentageNum.toFixed(1)}%).${ALERT_SUFFIX}`);
       }
       const pressure = numericOrNull(latestByKey.get(`${tankCode}:pressure`)?.value);
       const temperature = numericOrNull(latestByKey.get(`${tankCode}:temperature`)?.value);
       if (tankCode !== 'LPG' && pressure !== null && pressure > config.fuelMaxPressureBar) {
-        alerts.push(`Przekroczona dopuszczalna wartość ciśnienia w zbiorniku ${fuel.type}: ${pressure.toFixed(2)} bar.${ALERT_SUFFIX}`);
+        alerts.push(`Przekroczona dopuszczalna wartość ciśnienia w zbiorniku ${displayType}: ${pressure.toFixed(2)} bar.${ALERT_SUFFIX}`);
       }
       if (tankCode !== 'LPG' && temperature !== null && temperature > config.fuelMaxTempC) {
-        alerts.push(`Przekroczona dopuszczalna temperatura w zbiorniku ${fuel.type}: ${temperature.toFixed(2)} °C.${ALERT_SUFFIX}`);
+        alerts.push(`Przekroczona dopuszczalna temperatura w zbiorniku ${displayType}: ${temperature.toFixed(2)} °C.${ALERT_SUFFIX}`);
       }
       return {
         ...fuel,
+        type: displayType,
         percentage: percentageNum.toFixed(1),
         tankCode,
         pressure,

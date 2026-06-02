@@ -135,11 +135,11 @@ export function PublicLoyaltyProgramPage() {
                 <p className="item-meta">Koszt = litry × stawka pkt/L (wg typu paliwa)</p>
               </div>
               <div className="data-box">
-                <p className="item-title">Mycie standard</p>
+                <p className="item-title">Mycie standardowe</p>
                 <p className="item-meta">{loyalty ? `${loyalty.pointsPerStandardWash} pkt` : '—'}</p>
               </div>
               <div className="data-box">
-                <p className="item-title">Mycie z woskiem</p>
+                <p className="item-title">Mycie z woskowaniem</p>
                 <p className="item-meta">{loyalty ? `${loyalty.pointsPerWaxWash} pkt` : '—'}</p>
               </div>
             </div>
