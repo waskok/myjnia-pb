@@ -81,6 +81,12 @@ model LoyaltyProgram {
   pointsPerLpg          Int
   pointsPerStandardWash Int
   pointsPerWaxWash      Int
+  earnPointsPerE95          Int @default(2)
+  earnPointsPerE98          Int @default(2)
+  earnPointsPerDiesel       Int @default(2)
+  earnPointsPerLpg          Int @default(1)
+  earnPointsPerStandardWash Int @default(5)
+  earnPointsPerWaxWash      Int @default(10)
 }
 
 // ==========================================

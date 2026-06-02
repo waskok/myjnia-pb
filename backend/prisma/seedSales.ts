@@ -28,12 +28,18 @@ async function main() {
   if (existingLoyalty === 0) {
     await prisma.loyaltyProgram.create({
       data: {
-        pointsPerE95: 2,
-        pointsPerE98: 2,
-        pointsPerDiesel: 2,
-        pointsPerLpg: 1,
+        pointsPerE95: 100,
+        pointsPerE98: 100,
+        pointsPerDiesel: 100,
+        pointsPerLpg: 50,
         pointsPerStandardWash: 300,
-        pointsPerWaxWash: 400
+        pointsPerWaxWash: 400,
+        earnPointsPerE95: 2,
+        earnPointsPerE98: 2,
+        earnPointsPerDiesel: 2,
+        earnPointsPerLpg: 1,
+        earnPointsPerStandardWash: 5,
+        earnPointsPerWaxWash: 10
       }
     });
     console.log('✅ Parametry naliczania punktów lojalnościowych zostały ustawione!');

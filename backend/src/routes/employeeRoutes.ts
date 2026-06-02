@@ -318,17 +318,24 @@ router.post('/transactions/fuel', async (req, res) => {
     let pointsEarned = 0;
     let pointsDeducted = 0;
     const loyalty = await prisma.loyaltyProgram.findFirst();
-    const loyaltyRates: LoyaltyRates = {
+    const costRates: LoyaltyRates = {
       pointsPerE95: loyalty?.pointsPerE95 ?? 100,
       pointsPerE98: loyalty?.pointsPerE98 ?? 100,
       pointsPerDiesel: loyalty?.pointsPerDiesel ?? 100,
       pointsPerLpg: loyalty?.pointsPerLpg ?? 50
     };
-    const pointsRate = resolveFuelPointsRate(fuel.type, loyaltyRates);
+    const earnRates: LoyaltyRates = {
+      pointsPerE95: loyalty?.earnPointsPerE95 ?? 2,
+      pointsPerE98: loyalty?.earnPointsPerE98 ?? 2,
+      pointsPerDiesel: loyalty?.earnPointsPerDiesel ?? 2,
+      pointsPerLpg: loyalty?.earnPointsPerLpg ?? 1
+    };
+    const pointsRateCost = resolveFuelPointsRate(fuel.type, costRates);
+    const pointsRateEarn = resolveFuelPointsRate(fuel.type, earnRates);
 
     if (paymentMethod === 'Punkty') {
         if (!customer) return res.status(400).json({ error: 'Płacenie punktami wymaga podania e-maila zarejestrowanego klienta!' });
-        const pointsNeeded = Math.floor(liters * pointsRate);
+        const pointsNeeded = Math.floor(liters * pointsRateCost);
         if (customer.loyaltyPoints < pointsNeeded) {
             return res.status(400).json({ error: `Za mało punktów! Potrzeba ${pointsNeeded} pkt, klient ma ${customer.loyaltyPoints} pkt.` });
         }
@@ -337,7 +344,7 @@ router.post('/transactions/fuel', async (req, res) => {
         await prisma.customer.update({ where: { id: customer.id }, data: { loyaltyPoints: { decrement: pointsDeducted } } });
     } else {
         if (customer) {
-          pointsEarned = Math.floor(liters * pointsRate);
+          pointsEarned = Math.floor(liters * pointsRateEarn);
           await prisma.customer.update({ where: { id: customer.id }, data: { loyaltyPoints: { increment: pointsEarned } } });
         }
     }

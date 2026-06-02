@@ -493,15 +493,15 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
           <div className="card">
             <h3>Zdobywanie punktów lojalnościowych</h3>
             <div className="grid-responsive mb-20">
-              <div><label>Za 1 litr E95</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerE95} onChange={(e) => handleLoyaltyConfigChange('pointsPerE95', Number(e.target.value))} /></div>
-              <div><label>Za 1 litr E98</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerE98} onChange={(e) => handleLoyaltyConfigChange('pointsPerE98', Number(e.target.value))} /></div>
-              <div><label>Za 1 litr oleju napędowego ON</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerDiesel} onChange={(e) => handleLoyaltyConfigChange('pointsPerDiesel', Number(e.target.value))} /></div>
-              <div><label>Za 1 litr LPG</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerLpg} onChange={(e) => handleLoyaltyConfigChange('pointsPerLpg', Number(e.target.value))} /></div>
+              <div><label>Za 1 litr E95</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerE95} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerE95', Number(e.target.value))} /></div>
+              <div><label>Za 1 litr E98</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerE98} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerE98', Number(e.target.value))} /></div>
+              <div><label>Za 1 litr oleju napędowego ON</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerDiesel} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerDiesel', Number(e.target.value))} /></div>
+              <div><label>Za 1 litr LPG</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerLpg} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerLpg', Number(e.target.value))} /></div>
             </div>
             <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Za usługi myjni</h4>
             <div className="grid-responsive mb-20">
-              <div><label>Za mycie standardowe</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerStandardWash} onChange={(e) => handleLoyaltyConfigChange('pointsPerStandardWash', Number(e.target.value))} /></div>
-              <div><label>Za mycie z woskowaniem</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerWaxWash} onChange={(e) => handleLoyaltyConfigChange('pointsPerWaxWash', Number(e.target.value))} /></div>
+              <div><label>Za mycie standardowe</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerStandardWash} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerStandardWash', Number(e.target.value))} /></div>
+              <div><label>Za mycie z woskowaniem</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerWaxWash} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerWaxWash', Number(e.target.value))} /></div>
             </div>
             <button type="button" className="btn btn-primary" onClick={handleSaveLoyaltyConfig}>Zapisz stawki zyskiwania punktów</button>
           </div>

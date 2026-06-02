@@ -34,6 +34,12 @@ type LoyaltyConfig = {
   pointsPerLpg: number;
   pointsPerStandardWash: number;
   pointsPerWaxWash: number;
+  earnPointsPerE95: number;
+  earnPointsPerE98: number;
+  earnPointsPerDiesel: number;
+  earnPointsPerLpg: number;
+  earnPointsPerStandardWash: number;
+  earnPointsPerWaxWash: number;
 };
 
 type MonitoringConfigState = MonitoringConfig;
@@ -110,14 +116,19 @@ export const useAppLogic = () => {
   const [newDelivery, setNewDelivery] = useState({ fuelId: '', quantity: 1000, supplier: '', deliveryDate: '' });
   const [newPrice, setNewPrice] = useState<{ [key: number]: number }>({});
   const [newServicePrice, setNewServicePrice] = useState<{ [key: number]: number }>({});
-  const [newServicePoints, setNewServicePoints] = useState<{ [key: number]: number }>({});
   const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig>({
     pointsPerE95: 100,
     pointsPerE98: 100,
     pointsPerDiesel: 100,
     pointsPerLpg: 50,
     pointsPerStandardWash: 300,
-    pointsPerWaxWash: 400
+    pointsPerWaxWash: 400,
+    earnPointsPerE95: 2,
+    earnPointsPerE98: 2,
+    earnPointsPerDiesel: 2,
+    earnPointsPerLpg: 1,
+    earnPointsPerStandardWash: 5,
+    earnPointsPerWaxWash: 10
   });
   const [customerWashPointsCost, setCustomerWashPointsCost] = useState({
     standard: 300,
@@ -740,29 +751,6 @@ export const useAppLogic = () => {
       setMessage('❌ Błąd połączenia z serwerem!');
     }
   };
-  const handleUpdateServicePoints = async (id: number) => {
-    if (newServicePoints[id] === undefined || Number.isNaN(newServicePoints[id])) return;
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const res = await fetch(`http://localhost:5000/api/owner/services/${id}/loyalty-points`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ loyaltyPoints: Math.max(0, Math.floor(newServicePoints[id])) })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + (data.message || 'Zmieniono liczbę punktów za usługę.'));
-        fetchServices();
-        setNewServicePoints({ ...newServicePoints, [id]: 0 });
-      } else {
-        setMessage('❌ ' + (data.error || 'Nie udało się zmienić punktów usługi.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
   const handleLoyaltyConfigChange = (key: keyof LoyaltyConfig, value: number) => {
     setLoyaltyConfig((prev) => ({ ...prev, [key]: value }));
   };
@@ -776,7 +764,13 @@ export const useAppLogic = () => {
         pointsPerDiesel: Math.max(0, Math.floor(loyaltyConfig.pointsPerDiesel || 0)),
         pointsPerLpg: Math.max(0, Math.floor(loyaltyConfig.pointsPerLpg || 0)),
         pointsPerStandardWash: Math.max(0, Math.floor(loyaltyConfig.pointsPerStandardWash || 0)),
-        pointsPerWaxWash: Math.max(0, Math.floor(loyaltyConfig.pointsPerWaxWash || 0))
+        pointsPerWaxWash: Math.max(0, Math.floor(loyaltyConfig.pointsPerWaxWash || 0)),
+        earnPointsPerE95: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerE95 || 0)),
+        earnPointsPerE98: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerE98 || 0)),
+        earnPointsPerDiesel: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerDiesel || 0)),
+        earnPointsPerLpg: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerLpg || 0)),
+        earnPointsPerStandardWash: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerStandardWash || 0)),
+        earnPointsPerWaxWash: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerWaxWash || 0))
       };
       const res = await fetch('http://localhost:5000/api/owner/loyalty-config', {
         method: 'PATCH',
@@ -791,7 +785,13 @@ export const useAppLogic = () => {
           pointsPerDiesel: data.pointsPerDiesel,
           pointsPerLpg: data.pointsPerLpg,
           pointsPerStandardWash: data.pointsPerStandardWash,
-          pointsPerWaxWash: data.pointsPerWaxWash
+          pointsPerWaxWash: data.pointsPerWaxWash,
+          earnPointsPerE95: data.earnPointsPerE95,
+          earnPointsPerE98: data.earnPointsPerE98,
+          earnPointsPerDiesel: data.earnPointsPerDiesel,
+          earnPointsPerLpg: data.earnPointsPerLpg,
+          earnPointsPerStandardWash: data.earnPointsPerStandardWash,
+          earnPointsPerWaxWash: data.earnPointsPerWaxWash
         });
         setMessage('✅ Zaktualizowano stawki punktów.');
       } else {
@@ -963,6 +963,6 @@ export const useAppLogic = () => {
 
   const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
-  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, newServicePoints, setNewServicePoints, loyaltyConfig, customerWashPointsCost, employees, customers, newEmployee, setNewEmployee, monitoringData, monitoringConfig, reportData, washReportData, monitoringReportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleUpdateServicePoints, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchWashReports, fetchMonitoringReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
+  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, customerWashPointsCost, employees, customers, newEmployee, setNewEmployee, monitoringData, monitoringConfig, reportData, washReportData, monitoringReportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchWashReports, fetchMonitoringReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
 export type AppLogic = ReturnType<typeof useAppLogic>;

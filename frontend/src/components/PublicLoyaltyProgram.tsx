@@ -8,14 +8,20 @@ type PublicLoyaltyProgram = {
   pointsPerLpg: number;
   pointsPerStandardWash: number;
   pointsPerWaxWash: number;
+  earnPointsPerE95: number;
+  earnPointsPerE98: number;
+  earnPointsPerDiesel: number;
+  earnPointsPerLpg: number;
+  earnPointsPerStandardWash: number;
+  earnPointsPerWaxWash: number;
 };
 
 function getFuelPointsRate(fuelType: string, loyalty: PublicLoyaltyProgram): number {
   const type = fuelType.toUpperCase();
-  if (type.includes('LPG')) return loyalty.pointsPerLpg;
-  if (type.includes('98')) return loyalty.pointsPerE98;
-  if (type.includes('DIESEL') || type.includes('ON')) return loyalty.pointsPerDiesel;
-  return loyalty.pointsPerE95;
+  if (type.includes('LPG')) return loyalty.earnPointsPerLpg;
+  if (type.includes('98')) return loyalty.earnPointsPerE98;
+  if (type.includes('DIESEL') || type.includes('ON')) return loyalty.earnPointsPerDiesel;
+  return loyalty.earnPointsPerE95;
 }
 
 export function PublicLoyaltyProgramPage() {

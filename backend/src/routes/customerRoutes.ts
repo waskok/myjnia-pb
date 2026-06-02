@@ -17,9 +17,19 @@ interface LoyaltyRates {
   pointsPerLpg: number;
 }
 
-type PublicLoyaltyProgram = LoyaltyRates & {
+type PublicLoyaltyProgram = {
+  pointsPerE95: number;
+  pointsPerE98: number;
+  pointsPerDiesel: number;
+  pointsPerLpg: number;
   pointsPerStandardWash: number;
   pointsPerWaxWash: number;
+  earnPointsPerE95: number;
+  earnPointsPerE98: number;
+  earnPointsPerDiesel: number;
+  earnPointsPerLpg: number;
+  earnPointsPerStandardWash: number;
+  earnPointsPerWaxWash: number;
 };
 
 function getPointsRateForProduct(product: string, rates: LoyaltyRates): number | null {
@@ -46,6 +56,10 @@ function calculatePointsForItems(items: Array<{ product: string; quantity: numbe
 // ==========================================
 router.get('/services', async (req, res) => {
   try {
+    const loyalty = await prisma.loyaltyProgram.findFirst();
+    const standardEarnPoints = loyalty?.earnPointsPerStandardWash ?? 5;
+    const waxEarnPoints = loyalty?.earnPointsPerWaxWash ?? 10;
+
     const services = await prisma.washService.findMany({
       where: {
         OR: [
@@ -65,6 +79,7 @@ router.get('/services', async (req, res) => {
       return {
         ...service,
         type: isStandard ? 'Mycie standardowe' : 'Mycie z woskowaniem',
+        loyaltyPoints: isStandard ? standardEarnPoints : waxEarnPoints,
       };
     }).sort((a, b) => {
       if (a.type === b.type) return a.id - b.id;
@@ -91,6 +106,12 @@ router.get('/loyalty-program', async (req, res) => {
           pointsPerLpg: 50,
           pointsPerStandardWash: 300,
           pointsPerWaxWash: 400,
+          earnPointsPerE95: 2,
+          earnPointsPerE98: 2,
+          earnPointsPerDiesel: 2,
+          earnPointsPerLpg: 1,
+          earnPointsPerStandardWash: 5,
+          earnPointsPerWaxWash: 10,
         },
       });
     }
@@ -102,6 +123,12 @@ router.get('/loyalty-program', async (req, res) => {
       pointsPerLpg: loyalty.pointsPerLpg,
       pointsPerStandardWash: loyalty.pointsPerStandardWash,
       pointsPerWaxWash: loyalty.pointsPerWaxWash,
+      earnPointsPerE95: loyalty.earnPointsPerE95,
+      earnPointsPerE98: loyalty.earnPointsPerE98,
+      earnPointsPerDiesel: loyalty.earnPointsPerDiesel,
+      earnPointsPerLpg: loyalty.earnPointsPerLpg,
+      earnPointsPerStandardWash: loyalty.earnPointsPerStandardWash,
+      earnPointsPerWaxWash: loyalty.earnPointsPerWaxWash,
     };
 
     res.json(payload);
@@ -259,17 +286,24 @@ router.get('/my-transactions', async (req, res) => {
       orderBy: { date: 'desc' }
     });
     const loyalty = await prisma.loyaltyProgram.findFirst();
-    const loyaltyRates: LoyaltyRates = {
+    const costRates: LoyaltyRates = {
       pointsPerE95: loyalty?.pointsPerE95 ?? 100,
       pointsPerE98: loyalty?.pointsPerE98 ?? 100,
       pointsPerDiesel: loyalty?.pointsPerDiesel ?? 100,
       pointsPerLpg: loyalty?.pointsPerLpg ?? 50
     };
+    const earnRates: LoyaltyRates = {
+      pointsPerE95: loyalty?.earnPointsPerE95 ?? 2,
+      pointsPerE98: loyalty?.earnPointsPerE98 ?? 2,
+      pointsPerDiesel: loyalty?.earnPointsPerDiesel ?? 2,
+      pointsPerLpg: loyalty?.earnPointsPerLpg ?? 1
+    };
 
     res.json(
       transactions.map((transaction) => {
-        const points = calculatePointsForItems(transaction.items, loyaltyRates);
-        const pointsDelta = transaction.paymentMethod === 'Punkty' ? -points : points;
+        const pointsUsed = calculatePointsForItems(transaction.items, costRates);
+        const pointsEarned = calculatePointsForItems(transaction.items, earnRates);
+        const pointsDelta = transaction.paymentMethod === 'Punkty' ? -pointsUsed : pointsEarned;
         return { ...transaction, pointsDelta };
       })
     );

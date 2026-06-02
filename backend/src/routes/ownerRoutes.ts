@@ -22,6 +22,12 @@ interface LoyaltyRates {
   pointsPerLpg: number;
   pointsPerStandardWash: number;
   pointsPerWaxWash: number;
+  earnPointsPerE95: number;
+  earnPointsPerE98: number;
+  earnPointsPerDiesel: number;
+  earnPointsPerLpg: number;
+  earnPointsPerStandardWash: number;
+  earnPointsPerWaxWash: number;
 }
 
 const router = Router();
@@ -266,7 +272,13 @@ router.get('/owner/loyalty-config', async (req, res) => {
           pointsPerDiesel: 100,
           pointsPerLpg: 50,
           pointsPerStandardWash: 300,
-          pointsPerWaxWash: 400
+          pointsPerWaxWash: 400,
+          earnPointsPerE95: 2,
+          earnPointsPerE98: 2,
+          earnPointsPerDiesel: 2,
+          earnPointsPerLpg: 1,
+          earnPointsPerStandardWash: 5,
+          earnPointsPerWaxWash: 10
         }
       });
     }
@@ -277,7 +289,13 @@ router.get('/owner/loyalty-config', async (req, res) => {
       pointsPerDiesel: loyalty.pointsPerDiesel,
       pointsPerLpg: loyalty.pointsPerLpg,
       pointsPerStandardWash: loyalty.pointsPerStandardWash,
-      pointsPerWaxWash: loyalty.pointsPerWaxWash
+      pointsPerWaxWash: loyalty.pointsPerWaxWash,
+      earnPointsPerE95: loyalty.earnPointsPerE95,
+      earnPointsPerE98: loyalty.earnPointsPerE98,
+      earnPointsPerDiesel: loyalty.earnPointsPerDiesel,
+      earnPointsPerLpg: loyalty.earnPointsPerLpg,
+      earnPointsPerStandardWash: loyalty.earnPointsPerStandardWash,
+      earnPointsPerWaxWash: loyalty.earnPointsPerWaxWash
     });
   } catch (error) {
     console.error(error);
@@ -299,7 +317,13 @@ router.patch('/owner/loyalty-config', async (req, res) => {
       pointsPerDiesel,
       pointsPerLpg,
       pointsPerStandardWash,
-      pointsPerWaxWash
+      pointsPerWaxWash,
+      earnPointsPerE95,
+      earnPointsPerE98,
+      earnPointsPerDiesel,
+      earnPointsPerLpg,
+      earnPointsPerStandardWash,
+      earnPointsPerWaxWash
     } = req.body as Partial<LoyaltyRates & { pointsPerStandardWash: number; pointsPerWaxWash: number }>;
     const normalized = {
       pointsPerE95: Math.floor(Number(pointsPerE95)),
@@ -307,7 +331,13 @@ router.patch('/owner/loyalty-config', async (req, res) => {
       pointsPerDiesel: Math.floor(Number(pointsPerDiesel)),
       pointsPerLpg: Math.floor(Number(pointsPerLpg)),
       pointsPerStandardWash: Math.floor(Number(pointsPerStandardWash)),
-      pointsPerWaxWash: Math.floor(Number(pointsPerWaxWash))
+      pointsPerWaxWash: Math.floor(Number(pointsPerWaxWash)),
+      earnPointsPerE95: Math.floor(Number(earnPointsPerE95)),
+      earnPointsPerE98: Math.floor(Number(earnPointsPerE98)),
+      earnPointsPerDiesel: Math.floor(Number(earnPointsPerDiesel)),
+      earnPointsPerLpg: Math.floor(Number(earnPointsPerLpg)),
+      earnPointsPerStandardWash: Math.floor(Number(earnPointsPerStandardWash)),
+      earnPointsPerWaxWash: Math.floor(Number(earnPointsPerWaxWash))
     };
 
     if (Object.values(normalized).some((v) => !Number.isFinite(v) || v < 0)) {
@@ -324,7 +354,13 @@ router.patch('/owner/loyalty-config', async (req, res) => {
           data: {
             ...normalized,
             pointsPerStandardWash: 300,
-            pointsPerWaxWash: 400
+            pointsPerWaxWash: 400,
+            earnPointsPerE95: 2,
+            earnPointsPerE98: 2,
+            earnPointsPerDiesel: 2,
+            earnPointsPerLpg: 1,
+            earnPointsPerStandardWash: 5,
+            earnPointsPerWaxWash: 10
           }
         });
 
@@ -335,7 +371,13 @@ router.patch('/owner/loyalty-config', async (req, res) => {
       pointsPerDiesel: loyalty.pointsPerDiesel,
       pointsPerLpg: loyalty.pointsPerLpg,
       pointsPerStandardWash: loyalty.pointsPerStandardWash,
-      pointsPerWaxWash: loyalty.pointsPerWaxWash
+      pointsPerWaxWash: loyalty.pointsPerWaxWash,
+      earnPointsPerE95: loyalty.earnPointsPerE95,
+      earnPointsPerE98: loyalty.earnPointsPerE98,
+      earnPointsPerDiesel: loyalty.earnPointsPerDiesel,
+      earnPointsPerLpg: loyalty.earnPointsPerLpg,
+      earnPointsPerStandardWash: loyalty.earnPointsPerStandardWash,
+      earnPointsPerWaxWash: loyalty.earnPointsPerWaxWash
     });
   } catch (error) {
     console.error(error);
@@ -436,7 +478,13 @@ router.get('/owner/reports', async (req, res) => {
       pointsPerDiesel: loyalty?.pointsPerDiesel ?? 100,
       pointsPerLpg: loyalty?.pointsPerLpg ?? 50,
       pointsPerStandardWash: loyalty?.pointsPerStandardWash ?? 300,
-      pointsPerWaxWash: loyalty?.pointsPerWaxWash ?? 400
+      pointsPerWaxWash: loyalty?.pointsPerWaxWash ?? 400,
+      earnPointsPerE95: loyalty?.earnPointsPerE95 ?? 2,
+      earnPointsPerE98: loyalty?.earnPointsPerE98 ?? 2,
+      earnPointsPerDiesel: loyalty?.earnPointsPerDiesel ?? 2,
+      earnPointsPerLpg: loyalty?.earnPointsPerLpg ?? 1,
+      earnPointsPerStandardWash: loyalty?.earnPointsPerStandardWash ?? 5,
+      earnPointsPerWaxWash: loyalty?.earnPointsPerWaxWash ?? 10
     };
 
     res.json({
