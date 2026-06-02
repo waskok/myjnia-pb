@@ -131,6 +131,21 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
                 const matchDate = empResDateFilter ? new Date(res.date).toISOString().substring(0, 10) === empResDateFilter : true;
                 const matchPhone = empResPhoneFilter ? (res.customer?.phone || '').includes(empResPhoneFilter) : true;
                 return matchDate && matchPhone;
+              }).sort((a, b) => {
+                const nowTs = Date.now();
+                const aTs = new Date(a.date).getTime();
+                const bTs = new Date(b.date).getTime();
+                const aUpcoming = aTs >= nowTs;
+                const bUpcoming = bTs >= nowTs;
+
+                if (aUpcoming && !bUpcoming) return -1;
+                if (!aUpcoming && bUpcoming) return 1;
+
+                if (aUpcoming && bUpcoming) {
+                  return aTs - bTs;
+                }
+
+                return bTs - aTs;
               }).map((res) => (
                 <li key={res.id} className="list-item card-like">
                   <div>

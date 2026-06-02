@@ -23,6 +23,7 @@ type EmployeeJobRole = 'Kasjer' | 'Monitoring' | 'Obsługa Myjni' | 'Obsługa dy
 type SessionRole = 'customer' | 'employee' | 'owner';
 type StoredSession = {
   firstName: string;
+  lastName?: string;
   role: SessionRole;
   jobRole?: EmployeeJobRole;
 };
@@ -70,6 +71,7 @@ export const useAppLogic = () => {
   const [message, setMessage] = useState('');
   const clearMessage = useCallback(() => setMessage(''), []);
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
+  const [loggedInUserLastInitial, setLoggedInUserLastInitial] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
   const [employeeJobRole, setEmployeeJobRole] = useState<EmployeeJobRole | null>(null);
   
@@ -588,11 +590,17 @@ export const useAppLogic = () => {
           localStorage.setItem('token', data.token);
           const sessionPayload: StoredSession = {
             firstName: data.user.firstName,
+            lastName: data.user.lastName,
             role: resolvedRole,
             jobRole: resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : undefined
           };
           localStorage.setItem('sessionUser', JSON.stringify(sessionPayload));
           setLoggedInUser(data.user.firstName);
+          setLoggedInUserLastInitial(
+            typeof data.user.lastName === 'string' && data.user.lastName.length > 0
+              ? data.user.lastName.charAt(0).toUpperCase()
+              : null
+          );
           setUserRole(resolvedRole);
           setEmployeeJobRole(resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : null);
           if (resolvedRole === 'owner') { 
@@ -913,6 +921,11 @@ export const useAppLogic = () => {
       if (!session.firstName || !session.role) return;
 
       setLoggedInUser(session.firstName);
+      setLoggedInUserLastInitial(
+        typeof session.lastName === 'string' && session.lastName.length > 0
+          ? session.lastName.charAt(0).toUpperCase()
+          : null
+      );
       setUserRole(session.role);
       setEmployeeJobRole(session.role === 'employee' ? (session.jobRole || null) : null);
 
@@ -961,8 +974,8 @@ export const useAppLogic = () => {
     if (kind === 'monitoring') fetchMonitoringReports(reportPeriod, fullDate);
   };
 
-  const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
+  const logout = () => { localStorage.clear(); setLoggedInUser(null); setLoggedInUserLastInitial(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
-  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, customerWashPointsCost, employees, customers, newEmployee, setNewEmployee, monitoringData, monitoringConfig, reportData, washReportData, monitoringReportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchWashReports, fetchMonitoringReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
+  return { message, clearMessage, loggedInUser, loggedInUserLastInitial, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, customerWashPointsCost, employees, customers, newEmployee, setNewEmployee, monitoringData, monitoringConfig, reportData, washReportData, monitoringReportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchWashReports, fetchMonitoringReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
 export type AppLogic = ReturnType<typeof useAppLogic>;

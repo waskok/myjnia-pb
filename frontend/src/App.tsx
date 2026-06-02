@@ -268,7 +268,7 @@ function App() {
             )}
             {appLogic.userRole === 'employee' && appLogic.loggedInUser && (
               <span className="navbar-employee-inline">
-                Zalogowano jako: <strong>{`${appLogic.loggedInUser} ${appLogic.loggedInUser.charAt(0)} - ${appLogic.employeeJobRole ?? 'Pracownik'}`}</strong>
+                Zalogowano jako: <strong>{`${appLogic.loggedInUser}${appLogic.loggedInUserLastInitial ? ` ${appLogic.loggedInUserLastInitial}` : ''} - ${appLogic.employeeJobRole ?? 'Pracownik'}`}</strong>
               </span>
             )}
           </div>

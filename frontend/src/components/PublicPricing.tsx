@@ -91,16 +91,15 @@ export function PublicPricing() {
                   </div>
                   <div className="summary-values">
                     <strong className="price-inline">
-                      <span className="price-amount">{Number(f.pricePerLiter).toFixed(2)} zł</span>
+                      <span className="price-amount">{Number(f.pricePerLiter).toFixed(2)}-zł/L</span>
                       {loyalty && (
                         <>
                           <span className="price-unit"> lub </span>
                           <span className="points-alt-text">
-                            {getFuelPointsRate(f.type, loyalty)} punktów lojalnościowych
+                            {getFuelPointsRate(f.type, loyalty)} pkt/L
                           </span>
                         </>
                       )}
-                      <span className="price-unit"> /L</span>
                     </strong>
                   </div>
                 </article>
@@ -118,17 +117,17 @@ export function PublicPricing() {
                   </div>
                   <div className="summary-values">
                     <strong className="price-inline">
-                      <span className="price-amount">{Number(service.price).toFixed(2)} zł</span>
+                      <span className="price-amount">{Number(service.price).toFixed(2)}-zł</span>
                       {service.type.toLowerCase().includes('standard') && (
                         <>
                           <span className="price-unit"> lub </span>
-                          <span className="points-alt-text">{loyalty?.pointsPerStandardWash ?? 300} punktów lojalnościowych</span>
+                          <span className="points-alt-text">{loyalty?.pointsPerStandardWash ?? 300} pkt</span>
                         </>
                       )}
                       {service.type.toLowerCase().includes('wosk') && (
                         <>
                           <span className="price-unit"> lub </span>
-                          <span className="points-alt-text">{loyalty?.pointsPerWaxWash ?? 400} punktów lojalnościowych</span>
+                          <span className="points-alt-text">{loyalty?.pointsPerWaxWash ?? 400} pkt</span>
                         </>
                       )}
                     </strong>
