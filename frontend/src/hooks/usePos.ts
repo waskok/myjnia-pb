@@ -13,7 +13,6 @@ interface PosData {
 
 export const usePos = (
   setMessage: (msg: string) => void,
-  fuels: Fuel[],
   onTransactionSuccess: () => void,
 ) => {
   const [posData, setPosData] = useState<PosData>({
@@ -83,7 +82,6 @@ export const usePos = (
   };
 
   return {
-    fuels,
     posData,
     setPosData,
     posCustomerQuery,

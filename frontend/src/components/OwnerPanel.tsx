@@ -237,7 +237,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
         new Date(b[1][0]?.createdAt ?? '').getTime() - new Date(a[1][0]?.createdAt ?? '').getTime()
     );
 
-    groupEntries.forEach(([_, entries], groupIndex) => {
+    groupEntries.forEach(([, entries], groupIndex) => {
       const groupDate = entries[0]?.createdAt;
       const headerLine = `${groupIndex + 1}. Data i godzina: ${new Date(groupDate).toLocaleString('pl-PL')}`;
       const wrappedHeader = doc.splitTextToSize(toPdfText(headerLine), maxLineWidth);

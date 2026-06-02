@@ -617,7 +617,7 @@ router.post('/owner/schedule', ...ownerAuth, async (req, res) => {
   const uniqueDates = [...new Map(parsedDates.map((d) => [formatDateOnly(d), d])).values()];
 
   const results = await prisma.$transaction(async (tx) => {
-    const saved = [];
+      const saved: Awaited<ReturnType<typeof tx.workSchedule.update>>[] = [];
     for (const date of uniqueDates) {
       const existing = await tx.workSchedule.findFirst({ where: { employeeId: employee.id, date } });
       if (existing) {

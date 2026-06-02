@@ -26,7 +26,7 @@ app.use(cookieParser());
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 30,
   message: { error: 'Zbyt wiele prób logowania. Spróbuj ponownie za 15 minut.' },
   standardHeaders: true,
   legacyHeaders: false,

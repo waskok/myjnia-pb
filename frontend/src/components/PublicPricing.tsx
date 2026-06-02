@@ -92,7 +92,7 @@ export function PublicPricing() {
                   </div>
                   <div className="summary-values">
                     <strong className="price-inline">
-                      <span className="price-amount">{Number(f.pricePerLiter).toFixed(2)}-zł/L</span>
+                      <span className="price-amount">{Number(f.pricePerLiter).toFixed(2)} zł/L</span>
                       {loyalty && (
                         <>
                           <span className="price-unit"> lub </span>
@@ -118,7 +118,7 @@ export function PublicPricing() {
                   </div>
                   <div className="summary-values">
                     <strong className="price-inline">
-                      <span className="price-amount">{Number(service.price).toFixed(2)}-zł</span>
+                      <span className="price-amount">{Number(service.price).toFixed(2)} zł</span>
                       {service.type.toLowerCase().includes('standard') && (
                         <>
                           <span className="price-unit"> lub </span>

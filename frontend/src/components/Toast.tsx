@@ -10,30 +10,19 @@ interface ToastProps {
 }
 
 export const Toast: React.FC<ToastProps> = ({ message, onDismiss }) => {
-  const [visible, setVisible] = useState(false);
   const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
-    if (!message) {
-      setVisible(false);
-      setExiting(false);
-      return;
-    }
-
-    setVisible(true);
-    setExiting(false);
+    if (!message) return;
 
     const text = message.replace(/^✅\s*|^❌\s*/, '');
     const dynamicVisibleMs = Math.min(
       MAX_VISIBLE_MS,
-      BASE_VISIBLE_MS + Math.max(0, text.length - 80) * 30
+      BASE_VISIBLE_MS + Math.max(0, text.length - 80) * 30,
     );
 
     const hideTimer = setTimeout(() => setExiting(true), dynamicVisibleMs);
-    const dismissTimer = setTimeout(() => {
-      setVisible(false);
-      onDismiss();
-    }, dynamicVisibleMs + FADE_MS);
+    const dismissTimer = setTimeout(() => onDismiss(), dynamicVisibleMs + FADE_MS);
 
     return () => {
       clearTimeout(hideTimer);
@@ -41,7 +30,7 @@ export const Toast: React.FC<ToastProps> = ({ message, onDismiss }) => {
     };
   }, [message, onDismiss]);
 
-  if (!visible || !message) return null;
+  if (!message) return null;
 
   const isSuccess = message.includes('✅');
   const text = message.replace(/^✅\s*|^❌\s*/, '');

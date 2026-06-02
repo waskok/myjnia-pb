@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
 import { MonitoringTab } from './MonitoringTab';
 import { ScheduleCalendar } from './ScheduleCalendar';
@@ -12,6 +12,32 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
     empResPhoneFilter, setEmpResPhoneFilter, allReservations, getStatusColor,
     handleCompleteReservation, handleCancelReservation, monitoringData,
   } = props;
+
+  const filteredReservations = useMemo(() => {
+    // Snapshot current time for upcoming vs past sort (recomputed when filters change).
+    // eslint-disable-next-line react-hooks/purity -- intentional per-filter "now"
+    const nowTs = Date.now();
+    return allReservations
+      .filter((res) => {
+        const matchDate = empResDateFilter
+          ? new Date(res.date).toISOString().substring(0, 10) === empResDateFilter
+          : true;
+        const matchPhone = empResPhoneFilter
+          ? (res.customer?.phone || '').includes(empResPhoneFilter)
+          : true;
+        return matchDate && matchPhone;
+      })
+      .sort((a, b) => {
+        const aTs = new Date(a.date).getTime();
+        const bTs = new Date(b.date).getTime();
+        const aUpcoming = aTs >= nowTs;
+        const bUpcoming = bTs >= nowTs;
+        if (aUpcoming && !bUpcoming) return -1;
+        if (!aUpcoming && bUpcoming) return 1;
+        if (aUpcoming && bUpcoming) return aTs - bTs;
+        return bTs - aTs;
+      });
+  }, [allReservations, empResDateFilter, empResPhoneFilter]);
 
   const selectedFuel = fuels.find(f => String(f.id) === posData.fuelId);
   const costPLN = selectedFuel ? (selectedFuel.pricePerLiter * posData.quantity).toFixed(2) : '0.00';
@@ -125,28 +151,9 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
             </div>
           </div>
 
-          {allReservations.length === 0 ? <p>Brak rezerwacji w systemie.</p> : (
+          {filteredReservations.length === 0 ? <p>Brak rezerwacji w systemie.</p> : (
             <ul className="list-unstyled list-grid">
-              {allReservations.filter(res => {
-                const matchDate = empResDateFilter ? new Date(res.date).toISOString().substring(0, 10) === empResDateFilter : true;
-                const matchPhone = empResPhoneFilter ? (res.customer?.phone || '').includes(empResPhoneFilter) : true;
-                return matchDate && matchPhone;
-              }).sort((a, b) => {
-                const nowTs = Date.now();
-                const aTs = new Date(a.date).getTime();
-                const bTs = new Date(b.date).getTime();
-                const aUpcoming = aTs >= nowTs;
-                const bUpcoming = bTs >= nowTs;
-
-                if (aUpcoming && !bUpcoming) return -1;
-                if (!aUpcoming && bUpcoming) return 1;
-
-                if (aUpcoming && bUpcoming) {
-                  return aTs - bTs;
-                }
-
-                return bTs - aTs;
-              }).map((res) => (
+              {filteredReservations.map((res) => (
                 <li key={res.id} className="list-item card-like">
                   <div>
                     <p className="item-title">{new Date(res.date).toLocaleString()}</p>

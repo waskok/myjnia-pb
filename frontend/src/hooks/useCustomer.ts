@@ -7,7 +7,7 @@ type LoyaltyConfig = {
   pointsPerWaxWash: number;
 };
 
-export const useCustomer = (_setMessage: (msg: string) => void) => {
+export const useCustomer = () => {
   const [loyaltyPoints, setLoyaltyPoints] = useState<number>(0);
   const [myTransactions, setMyTransactions] = useState<Transaction[]>([]);
   const [customerWashPointsCost, setCustomerWashPointsCost] = useState({

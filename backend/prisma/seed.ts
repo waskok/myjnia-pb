@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Customer, type Employee, type Fuel, type WashService } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -31,7 +31,7 @@ async function main() {
     { login: 'lpg01', firstName: 'Tomasz', lastName: 'Zając', role: 'Obsługa dystrybutora LPG', phone: '503456789', email: 'tomasz.zajac@myjniapb.pl' },
   ];
 
-  const employees = [];
+  const employees: Employee[] = [];
   for (const def of employeeDefs) {
     const employee = await prisma.employee.upsert({
       where: { login: def.login },
@@ -55,7 +55,7 @@ async function main() {
     { type: 'LPG', pricePerLiter: 2.99, tankLevel: 3400, maxLevel: 10000 },
   ];
 
-  const fuels = [];
+  const fuels: Fuel[] = [];
   for (const def of fuelDefs) {
     const existing = await prisma.fuel.findFirst({ where: { type: def.type } });
     const fuel = existing
@@ -114,7 +114,7 @@ async function main() {
     { type: 'mycie_standard', price: 39.00, loyaltyPoints: 5 },
     { type: 'mycie_wosk', price: 59.00, loyaltyPoints: 10 },
   ];
-  const washServices = [];
+  const washServices: WashService[] = [];
   for (const def of serviceDefs) {
     const existing = await prisma.washService.findFirst({
       where: { carWashId: carWash.id, type: def.type },
@@ -140,7 +140,7 @@ async function main() {
     { companyName: 'Transport MAX Piotr Malinowski', email: 'kontakt@transportmax.pl', phone: '122345678', address: 'ul. Przemysłowa 8, 32-005 Wieliczka', nip: '6831234567', regon: '987654321', loyaltyPoints: 720 },
   ];
 
-  const allCustomers = [];
+  const allCustomers: Customer[] = [];
   for (const def of individualDefs) {
     const existing = await prisma.customer.findUnique({ where: { email: def.email } });
     if (!existing) {

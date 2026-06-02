@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { api } from '../utils/apiClient';
 import type { WashService, Reservation } from '../types';
 
 export const useReservations = (
   setMessage: (msg: string) => void,
   loyaltyPoints: number,
+  setServices: Dispatch<SetStateAction<WashService[]>>,
   onReservationSuccess: () => void,
 ) => {
-  const [services, setServices] = useState<WashService[]>([]);
   const [selectedService, setSelectedService] = useState('');
   const [reservationDate, setReservationDate] = useState('');
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
@@ -74,6 +74,7 @@ export const useReservations = (
       setMessage('✅ ' + (data.message ?? 'Złożono rezerwację.'));
       setReservationDate('');
       setSelectedService('');
+      await fetchMyReservations();
       onReservationSuccess();
     } else {
       setMessage('❌ ' + (data.error ?? 'Błąd rezerwacji.'));
@@ -81,8 +82,6 @@ export const useReservations = (
   };
 
   return {
-    services,
-    setServices,
     selectedService,
     setSelectedService,
     reservationDate,

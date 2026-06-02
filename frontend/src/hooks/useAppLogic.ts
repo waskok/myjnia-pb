@@ -24,16 +24,15 @@ export const useAppLogic = () => {
   const [empResPhoneFilter, setEmpResPhoneFilter] = useState('');
 
   const auth = useAuth(setMessage);
-  const customer = useCustomer(setMessage);
-  const reservations = useReservations(setMessage, customer.loyaltyPoints, () => {
-    void customer.fetchCustomerProfile();
-    void customer.fetchMyTransactions();
-    void reservations.fetchMyReservations();
-  });
-  const pos = usePos(setMessage, fuels, () => void admin.fetchFuels());
+  const customer = useCustomer();
   const admin = useAdminPanel(setMessage, setFuels, setServices);
   const monitoring = useMonitoring(setMessage);
   const schedule = useSchedule(setMessage, auth.userRole);
+  const reservations = useReservations(setMessage, customer.loyaltyPoints, setServices, () => {
+    void customer.fetchCustomerProfile();
+    void customer.fetchMyTransactions();
+  });
+  const pos = usePos(setMessage, () => void admin.fetchFuels());
 
   const [allReservations, setAllReservations] = useState<import('../types').Reservation[]>([]);
 
@@ -97,10 +96,13 @@ export const useAppLogic = () => {
       void reservations.fetchMyReservations();
       void customer.fetchLoyaltyRates();
     }
+    // Intentionally only re-run when role changes (not when hook identities change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.userRole, auth.employeeJobRole]);
 
   useEffect(() => {
     if (fuels.length > 0) pos.initPosWithFuels(fuels);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fuels]);
 
   const getMinDateTime = () => {
