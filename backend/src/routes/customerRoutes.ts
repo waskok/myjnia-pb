@@ -17,6 +17,11 @@ interface LoyaltyRates {
   pointsPerLpg: number;
 }
 
+type PublicLoyaltyProgram = LoyaltyRates & {
+  pointsPerStandardWash: number;
+  pointsPerWaxWash: number;
+};
+
 function getPointsRateForProduct(product: string, rates: LoyaltyRates): number | null {
   const normalized = product.toUpperCase();
   if (normalized.includes('LPG')) return rates.pointsPerLpg;
@@ -45,6 +50,39 @@ router.get('/services', async (req, res) => {
     res.json(services);
   } catch (error) {
     res.status(500).json({ error: 'Błąd pobierania usług' });
+  }
+});
+
+// Publiczny podgląd programu lojalnościowego (bez logowania).
+router.get('/loyalty-program', async (req, res) => {
+  try {
+    let loyalty = await prisma.loyaltyProgram.findFirst();
+    if (!loyalty) {
+      loyalty = await prisma.loyaltyProgram.create({
+        data: {
+          pointsPerE95: 100,
+          pointsPerE98: 100,
+          pointsPerDiesel: 100,
+          pointsPerLpg: 50,
+          pointsPerStandardWash: 10,
+          pointsPerWaxWash: 20,
+        },
+      });
+    }
+
+    const payload: PublicLoyaltyProgram = {
+      pointsPerE95: loyalty.pointsPerE95,
+      pointsPerE98: loyalty.pointsPerE98,
+      pointsPerDiesel: loyalty.pointsPerDiesel,
+      pointsPerLpg: loyalty.pointsPerLpg,
+      pointsPerStandardWash: loyalty.pointsPerStandardWash,
+      pointsPerWaxWash: loyalty.pointsPerWaxWash,
+    };
+
+    res.json(payload);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd pobierania programu lojalnościowego.' });
   }
 });
 

@@ -14,6 +14,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery,
     newEmployee, setNewEmployee, handleAddEmployee, employees, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, customers,
     fetchMonitoring, monitoringData, scheduleYear, scheduleMonth, scheduleData,
+    monitoringConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig,
     selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime,
     scheduleEndTime, setScheduleEndTime,
     changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule,
@@ -368,7 +369,16 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
         />
       )}
 
-      {activeTab === 'monitoring' && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}
+      {activeTab === 'monitoring' && (
+        <MonitoringTab
+          monitoringData={monitoringData}
+          fetchMonitoring={fetchMonitoring}
+          monitoringConfig={monitoringConfig}
+          canManageConfig
+          onMonitoringConfigChange={handleMonitoringConfigChange}
+          onSaveMonitoringConfig={handleSaveMonitoringConfig}
+        />
+      )}
     </div>
   );
 };

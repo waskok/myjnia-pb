@@ -161,13 +161,18 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
         </div>
       )}
 
-      {activeEmpTab === 'monitoring' && canViewMonitoring && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}
+      {activeEmpTab === 'monitoring' && canViewMonitoring && (
+        <MonitoringTab
+          monitoringData={monitoringData}
+          fetchMonitoring={fetchMonitoring}
+        />
+      )}
 
       {activeEmpTab === 'lpg' && canViewLpg && (
         <div className="card">
           <div className="flex-space-between mb-20" style={{ alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>Stan dystrybutora LPG</h3>
-            <button onClick={fetchMonitoring} className="btn btn-dark">Odśwież</button>
+            <button onClick={() => fetchMonitoring()} className="btn btn-dark">Odśwież</button>
           </div>
 
           <div className="grid-responsive mb-20">

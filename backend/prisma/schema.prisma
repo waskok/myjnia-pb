@@ -222,7 +222,10 @@ model Sensor {
   value        Float
   tank         String
   status       String
+  createdAt    DateTime   @default(now())
   monitoring   Monitoring @relation(fields: [monitoringId], references: [id])
+
+  @@index([type, tank, createdAt])
 }
 
 model MonitoringReport {
@@ -231,6 +234,19 @@ model MonitoringReport {
   month        Int
   alerts       String
   monitoring   Monitoring @relation(fields: [monitoringId], references: [id])
+}
+
+model MonitoringConfig {
+  id                    Int      @id @default(autoincrement())
+  samplingIntervalSec   Int      @default(300)
+  fuelLowLevelPercent   Float    @default(20)
+  fuelMaxPressureBar    Float    @default(2.5)
+  fuelMaxTempC          Float    @default(35)
+  lpgLowLevelPercent    Float    @default(20)
+  lpgMaxPressureBar     Float    @default(14)
+  lpgMaxTempC           Float    @default(30)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 model SalesReport {

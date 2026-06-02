@@ -6,11 +6,13 @@ import { CustomerPanel } from './components/CustomerPanel';
 import { EmployeePanel } from './components/EmployeePanel';
 import { OwnerPanel } from './components/OwnerPanel';
 import { Toast } from './components/Toast';
+import { PublicPricing } from './components/PublicPricing';
+import { PublicLoyaltyProgramPage } from './components/PublicLoyaltyProgram';
 import heroImage from './assets/MyjniaPB.jpg';
 
 function App() {
   const appLogic = useAppLogic();
-  const [publicPage, setPublicPage] = useState<'home' | 'auth'>('home');
+  const [publicPage, setPublicPage] = useState<'home' | 'pricing' | 'loyalty' | 'auth'>('home');
   type EmployeeTab = 'pos' | 'rezerwacje' | 'monitoring' | 'lpg' | 'grafik';
   const allowedEmployeeTabs = useMemo(() => {
     if (appLogic.employeeJobRole === 'Kasjer') return ['pos', 'grafik'] as EmployeeTab[];
@@ -46,6 +48,10 @@ function App() {
           Zarezerwuj termin online albo zaloguj się do odpowiedniej strefy, aby zarządzać swoim kontem.
         </p>
       </div>
+    ) : publicPage === 'pricing' ? (
+      <PublicPricing />
+    ) : publicPage === 'loyalty' ? (
+      <PublicLoyaltyProgramPage />
     ) : (
       <AuthScreen {...appLogic} />
     );
@@ -69,6 +75,21 @@ function App() {
       >
         Strona główna
       </button>
+      <button
+        type="button"
+        className={`tab-btn-large ${publicPage === 'pricing' ? 'tab-active-primary' : 'tab-inactive'}`}
+        onClick={() => setPublicPage('pricing')}
+      >
+        Cennik
+      </button>
+      <button
+        type="button"
+        className={`tab-btn-large ${publicPage === 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`}
+        onClick={() => setPublicPage('loyalty')}
+      >
+        Program lojalnościowy
+      </button>
+      <span className="nav-divider-vertical" aria-hidden="true" />
       <button
         type="button"
         className={`tab-btn-large ${publicPage === 'auth' && appLogic.loginMode === 'customer' ? 'tab-active-primary' : 'tab-inactive'}`}

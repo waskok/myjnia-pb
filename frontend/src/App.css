@@ -41,9 +41,9 @@ html, body, #root {
 }
 
 .global-navbar-inner {
-  width: min(1400px, 100%);
+  width: 100%;
   margin: 0 auto;
-  padding: 10px 16px;
+  padding: 10px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -102,6 +102,14 @@ html, body, #root {
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.nav-divider-vertical {
+  width: 3px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  margin: 0 4px;
 }
 
 /* Top navigation tabs: text-like links with underline animation */
@@ -442,6 +450,23 @@ html, body, #root {
 
 .summary-values strong { color: #0369a1; }
 .summary-values span { color: #475569; font-size: 0.86rem; }
+
+.price-inline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.summary-values .price-amount {
+  color: var(--primary);
+}
+
+.summary-values .price-unit {
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.9em;
+}
 
 .alert-box {
   border-radius: 10px;
