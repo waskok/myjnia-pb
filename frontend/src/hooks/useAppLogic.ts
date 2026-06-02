@@ -1,11 +1,29 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { WashService, Reservation, Transaction, Fuel, Customer, Delivery, Employee, MonitoringData, ReportData, ReportPeriodType, ActiveCustTab, ScheduleMonthData } from '../types';
+import type {
+  WashService,
+  Reservation,
+  Transaction,
+  Fuel,
+  Customer,
+  Delivery,
+  Employee,
+  MonitoringData,
+  MonitoringConfig,
+  ReportData,
+  ReportPeriodType,
+  ActiveCustTab,
+  ScheduleMonthData,
+  WashReportData,
+  MonitoringReportData,
+  OwnerReportKind
+} from '../types';
 import { jsPDF } from 'jspdf';
 
 type EmployeeJobRole = 'Kasjer' | 'Monitoring' | 'Obsługa Myjni' | 'Obsługa dystrybutora LPG';
 type SessionRole = 'customer' | 'employee' | 'owner';
 type StoredSession = {
   firstName: string;
+  lastName?: string;
   role: SessionRole;
   jobRole?: EmployeeJobRole;
 };
@@ -15,7 +33,17 @@ type LoyaltyConfig = {
   pointsPerE98: number;
   pointsPerDiesel: number;
   pointsPerLpg: number;
+  pointsPerStandardWash: number;
+  pointsPerWaxWash: number;
+  earnPointsPerE95: number;
+  earnPointsPerE98: number;
+  earnPointsPerDiesel: number;
+  earnPointsPerLpg: number;
+  earnPointsPerStandardWash: number;
+  earnPointsPerWaxWash: number;
 };
+
+type MonitoringConfigState = MonitoringConfig;
 
 type GeneratedInvoice = {
   number: string;
@@ -43,6 +71,7 @@ export const useAppLogic = () => {
   const [message, setMessage] = useState('');
   const clearMessage = useCallback(() => setMessage(''), []);
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
+  const [loggedInUserLastInitial, setLoggedInUserLastInitial] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
   const [employeeJobRole, setEmployeeJobRole] = useState<EmployeeJobRole | null>(null);
   
@@ -93,14 +122,37 @@ export const useAppLogic = () => {
     pointsPerE95: 100,
     pointsPerE98: 100,
     pointsPerDiesel: 100,
-    pointsPerLpg: 50
+    pointsPerLpg: 50,
+    pointsPerStandardWash: 300,
+    pointsPerWaxWash: 400,
+    earnPointsPerE95: 2,
+    earnPointsPerE98: 2,
+    earnPointsPerDiesel: 2,
+    earnPointsPerLpg: 1,
+    earnPointsPerStandardWash: 5,
+    earnPointsPerWaxWash: 10
+  });
+  const [customerWashPointsCost, setCustomerWashPointsCost] = useState({
+    standard: 300,
+    wax: 400
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [newEmployee, setNewEmployee] = useState({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' });
   const [monitoringData, setMonitoringData] = useState<MonitoringData | null>(null);
+  const [monitoringConfig, setMonitoringConfig] = useState<MonitoringConfigState>({
+    samplingIntervalSec: 300,
+    fuelLowLevelPercent: 20,
+    fuelMaxPressureBar: 2.5,
+    fuelMaxTempC: 35,
+    lpgLowLevelPercent: 20,
+    lpgMaxPressureBar: 14,
+    lpgMaxTempC: 30
+  });
   
   const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [washReportData, setWashReportData] = useState<WashReportData | null>(null);
+  const [monitoringReportData, setMonitoringReportData] = useState<MonitoringReportData | null>(null);
   const [reportPeriod, setReportPeriod] = useState<ReportPeriodType>('all');
   const [reportDateStr, setReportDateStr] = useState<string>(new Date().toISOString().substring(0, 10));
 
@@ -267,6 +319,14 @@ export const useAppLogic = () => {
       if (transRes.ok) setMyTransactions(await transRes.json());
       const profRes = await fetch('http://localhost:5000/api/my-profile', { headers: { 'Authorization': `Bearer ${token}` } });
       if (profRes.ok) { const profData = await profRes.json(); setLoyaltyPoints(profData.loyaltyPoints); }
+      const loyaltyRes = await fetch('http://localhost:5000/api/loyalty-program');
+      if (loyaltyRes.ok) {
+        const loyaltyData = await loyaltyRes.json() as Partial<LoyaltyConfig>;
+        setCustomerWashPointsCost({
+          standard: Number(loyaltyData.pointsPerStandardWash) || 300,
+          wax: Number(loyaltyData.pointsPerWaxWash) || 400
+        });
+      }
     } catch (e) { console.error(e); } 
   };
 
@@ -293,7 +353,67 @@ export const useAppLogic = () => {
   };
   const fetchCustomers = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/customers', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setCustomers(await res.json()); } catch (e) { console.error(e); } };
   const fetchLoyaltyConfig = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/loyalty-config', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setLoyaltyConfig(await res.json()); } catch (e) { console.error(e); } };
-  const fetchMonitoring = async () => { const token = localStorage.getItem('token'); if (!token) return; try { const res = await fetch('http://localhost:5000/api/monitoring', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setMonitoringData(await res.json()); } catch (e) { console.error(e); } };
+  const fetchMonitoring = async (period: '1h' | '24h' | '7d' | '30d' = '24h') => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/monitoring?period=${period}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = (await res.json()) as MonitoringData;
+        setMonitoringData(data);
+        if (data.config) {
+          setMonitoringConfig({
+            samplingIntervalSec: data.config.samplingIntervalSec,
+            fuelLowLevelPercent: data.config.fuelLowLevelPercent,
+            fuelMaxPressureBar: data.config.fuelMaxPressureBar,
+            fuelMaxTempC: data.config.fuelMaxTempC,
+            lpgLowLevelPercent: data.config.lpgLowLevelPercent,
+            lpgMaxPressureBar: data.config.lpgMaxPressureBar,
+            lpgMaxTempC: data.config.lpgMaxTempC
+          });
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMonitoringConfigChange = (key: keyof MonitoringConfigState, value: number) => {
+    setMonitoringConfig((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveMonitoringConfig = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const payload = {
+        samplingIntervalSec: Math.max(15, Math.floor(monitoringConfig.samplingIntervalSec || 0)),
+        fuelLowLevelPercent: Math.max(0, Number(monitoringConfig.fuelLowLevelPercent || 0)),
+        fuelMaxPressureBar: Math.max(0, Number(monitoringConfig.fuelMaxPressureBar || 0)),
+        fuelMaxTempC: Math.max(-50, Number(monitoringConfig.fuelMaxTempC || 0)),
+        lpgLowLevelPercent: Math.max(0, Number(monitoringConfig.lpgLowLevelPercent || 0)),
+        lpgMaxPressureBar: Math.max(0, Number(monitoringConfig.lpgMaxPressureBar || 0)),
+        lpgMaxTempC: Math.max(-50, Number(monitoringConfig.lpgMaxTempC || 0))
+      };
+      const res = await fetch('http://localhost:5000/api/monitoring/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('✅ ' + (data.message || 'Zaktualizowano konfigurację monitoringu.'));
+        await fetchMonitoring();
+      } else {
+        setMessage('❌ ' + (data.error || 'Nie udało się zaktualizować konfiguracji monitoringu.'));
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage('❌ Błąd połączenia z serwerem!');
+    }
+  };
 
   const fetchSchedule = async (year = scheduleYear, month = scheduleMonth) => {
     const token = localStorage.getItem('token');
@@ -422,6 +542,26 @@ export const useAppLogic = () => {
       if (res.ok) setReportData(await res.json());
     } catch (e) { console.error(e); }
   };
+  const fetchWashReports = async (period = reportPeriod, dateVal = reportDateStr) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      let url = 'http://localhost:5000/api/owner/reports/wash';
+      if (period !== 'all') url += `?period=${period}&date=${dateVal}`;
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) setWashReportData(await res.json());
+    } catch (e) { console.error(e); }
+  };
+  const fetchMonitoringReports = async (period = reportPeriod, dateVal = reportDateStr) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      let url = 'http://localhost:5000/api/owner/reports/monitoring';
+      if (period !== 'all') url += `?period=${period}&date=${dateVal}`;
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) setMonitoringReportData(await res.json());
+    } catch (e) { console.error(e); }
+  };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -450,11 +590,17 @@ export const useAppLogic = () => {
           localStorage.setItem('token', data.token);
           const sessionPayload: StoredSession = {
             firstName: data.user.firstName,
+            lastName: data.user.lastName,
             role: resolvedRole,
             jobRole: resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : undefined
           };
           localStorage.setItem('sessionUser', JSON.stringify(sessionPayload));
           setLoggedInUser(data.user.firstName);
+          setLoggedInUserLastInitial(
+            typeof data.user.lastName === 'string' && data.user.lastName.length > 0
+              ? data.user.lastName.charAt(0).toUpperCase()
+              : null
+          );
           setUserRole(resolvedRole);
           setEmployeeJobRole(resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : null);
           if (resolvedRole === 'owner') { 
@@ -504,19 +650,57 @@ export const useAppLogic = () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
+      if (!selectedService) {
+        setMessage('❌ Wybierz wariant rezerwacji.');
+        return;
+      }
       if (new Date(reservationDate).getTime() < Date.now()) {
         setMessage('❌ Nie można rezerwować terminów w przeszłości.');
         return;
       }
+
+      const [modeRaw, serviceIdRaw, pointsRaw] = selectedService.split(':');
+      const isPointsPayment = modeRaw === 'points';
+      const washServiceId = isPointsPayment ? Number(serviceIdRaw) : Number(selectedService);
+      const pointsCost = isPointsPayment ? Number(pointsRaw) : 0;
+
+      if (!Number.isFinite(washServiceId) || washServiceId <= 0) {
+        setMessage('❌ Nieprawidłowo wybrana usługa.');
+        return;
+      }
+
+      if (isPointsPayment) {
+        if (!Number.isFinite(pointsCost) || pointsCost <= 0) {
+          setMessage('❌ Nieprawidłowa liczba punktów dla wybranej usługi.');
+          return;
+        }
+        if (loyaltyPoints < pointsCost) {
+          setMessage(`❌ Za mało punktów. Potrzebujesz ${pointsCost} punktów lojalnościowych, a masz ${loyaltyPoints} punktów lojalnościowych.`);
+          return;
+        }
+      }
+
+      const confirmationMessage = isPointsPayment
+        ? 'Czy na pewno chcesz potwierdzić rezerwację opłaconą punktami?\n\nW przypadku anulowania rezerwacji opłaconej punktami punkty nie podlegają zwrotowi.\nUpewnij się, że data i godzina są poprawne.'
+        : 'Czy na pewno chcesz potwierdzić rezerwację?\n\nUpewnij się, że data i godzina są poprawne.';
+      if (!window.confirm(confirmationMessage)) return;
+
       const res = await fetch('http://localhost:5000/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, washServiceId: selectedService, date: reservationDate }),
+        body: JSON.stringify({
+          token,
+          washServiceId,
+          date: reservationDate,
+          paymentMode: isPointsPayment ? 'points' : 'cash',
+          pointsCost: isPointsPayment ? pointsCost : undefined
+        }),
       });
       const data = await res.json();
       if (res.ok) {
         setMessage('✅ ' + data.message);
         setReservationDate('');
+        setSelectedService('');
         fetchCustomerData(token);
       } else {
         setMessage('❌ ' + data.error);
@@ -586,7 +770,15 @@ export const useAppLogic = () => {
         pointsPerE95: Math.max(0, Math.floor(loyaltyConfig.pointsPerE95 || 0)),
         pointsPerE98: Math.max(0, Math.floor(loyaltyConfig.pointsPerE98 || 0)),
         pointsPerDiesel: Math.max(0, Math.floor(loyaltyConfig.pointsPerDiesel || 0)),
-        pointsPerLpg: Math.max(0, Math.floor(loyaltyConfig.pointsPerLpg || 0))
+        pointsPerLpg: Math.max(0, Math.floor(loyaltyConfig.pointsPerLpg || 0)),
+        pointsPerStandardWash: Math.max(0, Math.floor(loyaltyConfig.pointsPerStandardWash || 0)),
+        pointsPerWaxWash: Math.max(0, Math.floor(loyaltyConfig.pointsPerWaxWash || 0)),
+        earnPointsPerE95: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerE95 || 0)),
+        earnPointsPerE98: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerE98 || 0)),
+        earnPointsPerDiesel: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerDiesel || 0)),
+        earnPointsPerLpg: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerLpg || 0)),
+        earnPointsPerStandardWash: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerStandardWash || 0)),
+        earnPointsPerWaxWash: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerWaxWash || 0))
       };
       const res = await fetch('http://localhost:5000/api/owner/loyalty-config', {
         method: 'PATCH',
@@ -599,7 +791,15 @@ export const useAppLogic = () => {
           pointsPerE95: data.pointsPerE95,
           pointsPerE98: data.pointsPerE98,
           pointsPerDiesel: data.pointsPerDiesel,
-          pointsPerLpg: data.pointsPerLpg
+          pointsPerLpg: data.pointsPerLpg,
+          pointsPerStandardWash: data.pointsPerStandardWash,
+          pointsPerWaxWash: data.pointsPerWaxWash,
+          earnPointsPerE95: data.earnPointsPerE95,
+          earnPointsPerE98: data.earnPointsPerE98,
+          earnPointsPerDiesel: data.earnPointsPerDiesel,
+          earnPointsPerLpg: data.earnPointsPerLpg,
+          earnPointsPerStandardWash: data.earnPointsPerStandardWash,
+          earnPointsPerWaxWash: data.earnPointsPerWaxWash
         });
         setMessage('✅ Zaktualizowano stawki punktów.');
       } else {
@@ -721,6 +921,11 @@ export const useAppLogic = () => {
       if (!session.firstName || !session.role) return;
 
       setLoggedInUser(session.firstName);
+      setLoggedInUserLastInitial(
+        typeof session.lastName === 'string' && session.lastName.length > 0
+          ? session.lastName.charAt(0).toUpperCase()
+          : null
+      );
       setUserRole(session.role);
       setEmployeeJobRole(session.role === 'employee' ? (session.jobRole || null) : null);
 
@@ -759,16 +964,18 @@ export const useAppLogic = () => {
     }
   }, []);
 
-  const handleDateChange = (val: string) => {
+  const handleDateChange = (val: string, kind: OwnerReportKind = 'sales') => {
     let fullDate = val;
     if (val.length === 7) fullDate = `${val}-01`;
     if (val.length === 4) fullDate = `${val}-01-01`;
     setReportDateStr(fullDate);
-    fetchReports(reportPeriod, fullDate);
+    if (kind === 'sales') fetchReports(reportPeriod, fullDate);
+    if (kind === 'wash') fetchWashReports(reportPeriod, fullDate);
+    if (kind === 'monitoring') fetchMonitoringReports(reportPeriod, fullDate);
   };
 
-  const logout = () => { localStorage.clear(); setLoggedInUser(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
+  const logout = () => { localStorage.clear(); setLoggedInUser(null); setLoggedInUserLastInitial(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
 
-  return { message, clearMessage, loggedInUser, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, employees, customers, newEmployee, setNewEmployee, monitoringData, reportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
+  return { message, clearMessage, loggedInUser, loggedInUserLastInitial, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, customerWashPointsCost, employees, customers, newEmployee, setNewEmployee, monitoringData, monitoringConfig, reportData, washReportData, monitoringReportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchWashReports, fetchMonitoringReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
 export type AppLogic = ReturnType<typeof useAppLogic>;

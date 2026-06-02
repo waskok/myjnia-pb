@@ -55,7 +55,7 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
 
           {posVerifiedCustomer && (
              <div className="alert-box alert-success mb-15">
-                <strong>Zweryfikowano:</strong> {posVerifiedCustomer.firstName} | <strong>Dostępne punkty:</strong> {posVerifiedCustomer.loyaltyPoints} pkt
+                <strong>Zweryfikowano:</strong> {posVerifiedCustomer.firstName} | <strong>Dostępne punkty:</strong> {posVerifiedCustomer.loyaltyPoints} punktów lojalnościowych
              </div>
           )}
 
@@ -76,7 +76,12 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
             </div>
             
             <div className="points-badge my-15" style={{ background: '#f1f5f9', color: '#0f172a', padding: '15px' }}>
-              <span style={{ fontSize: '18px' }}>Do zapłaty: <strong>{costPLN} zł</strong></span> {posVerifiedCustomer && (<span> albo <strong style={{ color: '#10b981' }}>{costPoints} pkt</strong></span>)}
+              <span style={{ fontSize: '18px' }}>Do zapłaty: <strong>{costPLN} zł</strong></span>{' '}
+              {posVerifiedCustomer && (
+                <span className="points-cost-text">
+                  lub Koszt: {costPoints} punktów lojalnościowych
+                </span>
+              )}
             </div>
 
             <div className="pos-step-card">
@@ -126,6 +131,21 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
                 const matchDate = empResDateFilter ? new Date(res.date).toISOString().substring(0, 10) === empResDateFilter : true;
                 const matchPhone = empResPhoneFilter ? (res.customer?.phone || '').includes(empResPhoneFilter) : true;
                 return matchDate && matchPhone;
+              }).sort((a, b) => {
+                const nowTs = Date.now();
+                const aTs = new Date(a.date).getTime();
+                const bTs = new Date(b.date).getTime();
+                const aUpcoming = aTs >= nowTs;
+                const bUpcoming = bTs >= nowTs;
+
+                if (aUpcoming && !bUpcoming) return -1;
+                if (!aUpcoming && bUpcoming) return 1;
+
+                if (aUpcoming && bUpcoming) {
+                  return aTs - bTs;
+                }
+
+                return bTs - aTs;
               }).map((res) => (
                 <li key={res.id} className="list-item card-like">
                   <div>
@@ -161,13 +181,18 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
         </div>
       )}
 
-      {activeEmpTab === 'monitoring' && canViewMonitoring && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}
+      {activeEmpTab === 'monitoring' && canViewMonitoring && (
+        <MonitoringTab
+          monitoringData={monitoringData}
+          fetchMonitoring={fetchMonitoring}
+        />
+      )}
 
       {activeEmpTab === 'lpg' && canViewLpg && (
         <div className="card">
           <div className="flex-space-between mb-20" style={{ alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>Stan dystrybutora LPG</h3>
-            <button onClick={fetchMonitoring} className="btn btn-dark">Odśwież</button>
+            <button onClick={() => fetchMonitoring()} className="btn btn-dark">Odśwież</button>
           </div>
 
           <div className="grid-responsive mb-20">

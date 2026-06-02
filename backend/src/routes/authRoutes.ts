@@ -194,7 +194,11 @@ router.post('/staff/login', async (req, res) => {
           process.env.JWT_SECRET as string,
           { expiresIn: '8h' }
         );
-        return res.status(200).json({ message: 'Zalogowano do panelu Właściciela!', token, user: { firstName: owner.firstName, role: 'owner' } });
+        return res.status(200).json({
+          message: 'Zalogowano do panelu Właściciela!',
+          token,
+          user: { firstName: owner.firstName, lastName: owner.lastName, role: 'owner' }
+        });
       }
     }
 
@@ -210,7 +214,11 @@ router.post('/staff/login', async (req, res) => {
           process.env.JWT_SECRET as string,
           { expiresIn: '8h' }
         );
-        return res.status(200).json({ message: 'Zalogowano do panelu Pracownika!', token, user: { firstName: employee.firstName, role: 'employee', jobRole: employee.role } });
+        return res.status(200).json({
+          message: 'Zalogowano do panelu Pracownika!',
+          token,
+          user: { firstName: employee.firstName, lastName: employee.lastName, role: 'employee', jobRole: employee.role }
+        });
       }
     }
 

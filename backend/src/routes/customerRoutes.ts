@@ -17,6 +17,21 @@ interface LoyaltyRates {
   pointsPerLpg: number;
 }
 
+type PublicLoyaltyProgram = {
+  pointsPerE95: number;
+  pointsPerE98: number;
+  pointsPerDiesel: number;
+  pointsPerLpg: number;
+  pointsPerStandardWash: number;
+  pointsPerWaxWash: number;
+  earnPointsPerE95: number;
+  earnPointsPerE98: number;
+  earnPointsPerDiesel: number;
+  earnPointsPerLpg: number;
+  earnPointsPerStandardWash: number;
+  earnPointsPerWaxWash: number;
+};
+
 function getPointsRateForProduct(product: string, rates: LoyaltyRates): number | null {
   const normalized = product.toUpperCase();
   if (normalized.includes('LPG')) return rates.pointsPerLpg;
@@ -41,16 +56,97 @@ function calculatePointsForItems(items: Array<{ product: string; quantity: numbe
 // ==========================================
 router.get('/services', async (req, res) => {
   try {
-    const services = await prisma.washService.findMany();
-    res.json(services);
+    const loyalty = await prisma.loyaltyProgram.findFirst();
+    const standardEarnPoints = loyalty?.earnPointsPerStandardWash ?? 5;
+    const waxEarnPoints = loyalty?.earnPointsPerWaxWash ?? 10;
+
+    const services = await prisma.washService.findMany({
+      where: {
+        OR: [
+          { type: { contains: 'standard', mode: 'insensitive' } },
+          { type: { contains: 'wosk', mode: 'insensitive' } }
+        ],
+        NOT: {
+          type: { contains: 'premium', mode: 'insensitive' }
+        }
+      },
+      orderBy: { id: 'asc' }
+    });
+
+    const normalizedServices = services.map((service) => {
+      const normalizedType = service.type.toUpperCase();
+      const isStandard = normalizedType.includes('STANDARD');
+      return {
+        ...service,
+        type: isStandard ? 'Mycie standardowe' : 'Mycie z woskowaniem',
+        loyaltyPoints: isStandard ? standardEarnPoints : waxEarnPoints,
+      };
+    }).sort((a, b) => {
+      if (a.type === b.type) return a.id - b.id;
+      if (a.type === 'Mycie standardowe') return -1;
+      return 1;
+    });
+
+    res.json(normalizedServices);
   } catch (error) {
     res.status(500).json({ error: 'Błąd pobierania usług' });
   }
 });
 
+// Publiczny podgląd programu lojalnościowego (bez logowania).
+router.get('/loyalty-program', async (req, res) => {
+  try {
+    let loyalty = await prisma.loyaltyProgram.findFirst();
+    if (!loyalty) {
+      loyalty = await prisma.loyaltyProgram.create({
+        data: {
+          pointsPerE95: 100,
+          pointsPerE98: 100,
+          pointsPerDiesel: 100,
+          pointsPerLpg: 50,
+          pointsPerStandardWash: 300,
+          pointsPerWaxWash: 400,
+          earnPointsPerE95: 2,
+          earnPointsPerE98: 2,
+          earnPointsPerDiesel: 2,
+          earnPointsPerLpg: 1,
+          earnPointsPerStandardWash: 5,
+          earnPointsPerWaxWash: 10,
+        },
+      });
+    }
+
+    const payload: PublicLoyaltyProgram = {
+      pointsPerE95: loyalty.pointsPerE95,
+      pointsPerE98: loyalty.pointsPerE98,
+      pointsPerDiesel: loyalty.pointsPerDiesel,
+      pointsPerLpg: loyalty.pointsPerLpg,
+      pointsPerStandardWash: loyalty.pointsPerStandardWash,
+      pointsPerWaxWash: loyalty.pointsPerWaxWash,
+      earnPointsPerE95: loyalty.earnPointsPerE95,
+      earnPointsPerE98: loyalty.earnPointsPerE98,
+      earnPointsPerDiesel: loyalty.earnPointsPerDiesel,
+      earnPointsPerLpg: loyalty.earnPointsPerLpg,
+      earnPointsPerStandardWash: loyalty.earnPointsPerStandardWash,
+      earnPointsPerWaxWash: loyalty.earnPointsPerWaxWash,
+    };
+
+    res.json(payload);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd pobierania programu lojalnościowego.' });
+  }
+});
+
 router.post('/reservations', async (req, res) => {
   try {
-    const { token, washServiceId, date } = req.body;
+    const { token, washServiceId, date, paymentMode, pointsCost } = req.body as {
+      token?: string;
+      washServiceId?: number | string;
+      date?: string;
+      paymentMode?: 'cash' | 'points';
+      pointsCost?: number;
+    };
     if (!token || !washServiceId || !date) return res.status(400).json({ error: 'Brakujące dane rezerwacji!' });
 
     const reservationDate = new Date(date);
@@ -79,9 +175,58 @@ router.post('/reservations', async (req, res) => {
     }
 
     const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
-    await prisma.reservation.create({
-      data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: reservationDate, status: 'Oczekująca' }
-    });
+
+    if (paymentMode === 'points') {
+      const service = await prisma.washService.findUnique({
+        where: { id: Number(washServiceId) },
+        select: { id: true, type: true }
+      });
+      if (!service) {
+        return res.status(404).json({ error: 'Nie znaleziono wybranej usługi myjni.' });
+      }
+
+      const loyalty = await prisma.loyaltyProgram.findFirst();
+      const defaultStandard = 300;
+      const defaultWax = 400;
+      const normalizedType = service.type.toLowerCase();
+      const expectedPoints =
+        normalizedType.includes('wosk')
+          ? loyalty?.pointsPerWaxWash ?? defaultWax
+          : loyalty?.pointsPerStandardWash ?? defaultStandard;
+
+      const pointsToDeduct = Number(pointsCost ?? expectedPoints);
+      if (!Number.isFinite(pointsToDeduct) || pointsToDeduct <= 0) {
+        return res.status(400).json({ error: 'Nieprawidłowa liczba punktów dla rezerwacji.' });
+      }
+      if (pointsToDeduct !== expectedPoints) {
+        return res.status(400).json({ error: 'Nieprawidłowy koszt punktowy dla wybranej usługi.' });
+      }
+
+      const customer = await prisma.customer.findUnique({
+        where: { id: decoded.id },
+        select: { id: true, loyaltyPoints: true }
+      });
+      if (!customer) {
+        return res.status(404).json({ error: 'Nie znaleziono klienta.' });
+      }
+      if (customer.loyaltyPoints < pointsToDeduct) {
+        return res.status(400).json({ error: `Za mało punktów. Wymagane: ${pointsToDeduct} pkt.` });
+      }
+
+      await prisma.$transaction([
+        prisma.customer.update({
+          where: { id: decoded.id },
+          data: { loyaltyPoints: { decrement: pointsToDeduct } }
+        }),
+        prisma.reservation.create({
+          data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: reservationDate, status: 'Oczekująca' }
+        })
+      ]);
+    } else {
+      await prisma.reservation.create({
+        data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: reservationDate, status: 'Oczekująca' }
+      });
+    }
 
     res.status(201).json({ message: 'Złożono rezerwację.' });
   } catch (error) {
@@ -141,17 +286,24 @@ router.get('/my-transactions', async (req, res) => {
       orderBy: { date: 'desc' }
     });
     const loyalty = await prisma.loyaltyProgram.findFirst();
-    const loyaltyRates: LoyaltyRates = {
+    const costRates: LoyaltyRates = {
       pointsPerE95: loyalty?.pointsPerE95 ?? 100,
       pointsPerE98: loyalty?.pointsPerE98 ?? 100,
       pointsPerDiesel: loyalty?.pointsPerDiesel ?? 100,
       pointsPerLpg: loyalty?.pointsPerLpg ?? 50
     };
+    const earnRates: LoyaltyRates = {
+      pointsPerE95: loyalty?.earnPointsPerE95 ?? 2,
+      pointsPerE98: loyalty?.earnPointsPerE98 ?? 2,
+      pointsPerDiesel: loyalty?.earnPointsPerDiesel ?? 2,
+      pointsPerLpg: loyalty?.earnPointsPerLpg ?? 1
+    };
 
     res.json(
       transactions.map((transaction) => {
-        const points = calculatePointsForItems(transaction.items, loyaltyRates);
-        const pointsDelta = transaction.paymentMethod === 'Punkty' ? -points : points;
+        const pointsUsed = calculatePointsForItems(transaction.items, costRates);
+        const pointsEarned = calculatePointsForItems(transaction.items, earnRates);
+        const pointsDelta = transaction.paymentMethod === 'Punkty' ? -pointsUsed : pointsEarned;
         return { ...transaction, pointsDelta };
       })
     );

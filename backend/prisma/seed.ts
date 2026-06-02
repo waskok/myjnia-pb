@@ -23,9 +23,8 @@ async function main() {
   // 3. Dodajemy usługi do tej myjni (zgodnie ze specyfikacją PB)
   await prisma.washService.createMany({
     data: [
-      { carWashId: carWash.id, type: 'Mycie Standardowe', price: 30.00, loyaltyPoints: 10 },
-      { carWashId: carWash.id, type: 'Mycie z Woskowaniem', price: 50.00, loyaltyPoints: 20 },
-      { carWashId: carWash.id, type: 'Mycie Premium + Wosk', price: 70.00, loyaltyPoints: 35 }
+      { carWashId: carWash.id, type: 'Mycie standardowe', price: 19.99, loyaltyPoints: 5 },
+      { carWashId: carWash.id, type: 'Mycie z woskowaniem', price: 34.99, loyaltyPoints: 10 }
     ]
   });
 

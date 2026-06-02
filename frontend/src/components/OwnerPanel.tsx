@@ -2,18 +2,19 @@ import React, { useMemo, useState } from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
 import { MonitoringTab } from './MonitoringTab';
 import { OwnerScheduleTab } from './OwnerScheduleTab';
-import type { ReportPeriodType } from '../types';
+import type { OwnerReportKind, ReportPeriodType } from '../types';
 import { jsPDF } from 'jspdf';
 
 export const OwnerPanel: React.FC<AppLogic> = (props) => {
   const {
     activeTab, reportPeriod, setReportPeriod, reportDateStr,
-    handleDateChange, fetchReports, reportData, fuels, newPrice, setNewPrice, handleUpdatePrice,
+    handleDateChange, fetchReports, fetchWashReports, fetchMonitoringReports, reportData, washReportData, monitoringReportData, fuels, newPrice, setNewPrice, handleUpdatePrice,
     services, newServicePrice, setNewServicePrice, handleUpdateServicePrice,
     loyaltyConfig, handleLoyaltyConfigChange, handleSaveLoyaltyConfig,
     newDelivery, handleDeliveryChange, handleOrderDelivery, deliveries, handleCompleteDelivery,
     newEmployee, setNewEmployee, handleAddEmployee, employees, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, customers,
     fetchMonitoring, monitoringData, scheduleYear, scheduleMonth, scheduleData,
+    monitoringConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig,
     selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime,
     scheduleEndTime, setScheduleEndTime,
     changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule,
@@ -21,6 +22,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     getMinDateTime,
   } = props;
   const [employeeListFilter, setEmployeeListFilter] = useState<'active' | 'archived' | 'all'>('active');
+  const [reportKind, setReportKind] = useState<OwnerReportKind>('sales');
   const filteredEmployees = useMemo(() => {
     if (employeeListFilter === 'active') return employees.filter((emp) => emp.isActive);
     if (employeeListFilter === 'archived') return employees.filter((emp) => !emp.isActive);
@@ -55,8 +57,12 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     if (paymentMethod === 'Punkty') return `-${pointsUsed ?? 0}`;
     return `${totalAmount.toFixed(2)} zł`;
   };
+  const formatMonitoringValue = (value: number | null, unit: string) => {
+    if (value === null || Number.isNaN(value)) return '-';
+    return `${value.toFixed(2)} ${unit}`;
+  };
 
-  const handleExportReportPdf = () => {
+  const handleExportSalesReportPdf = () => {
     if (!reportData) return;
 
     const doc = new jsPDF();
@@ -113,7 +119,161 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
     });
 
     const safeDatePart = reportDateStr.substring(0, 10).replace(/[^0-9-]/g, '-');
-    const fileName = `raport-${reportPeriod}-${safeDatePart || 'all'}.pdf`;
+    const fileName = `raport-sprzedaz-${reportPeriod}-${safeDatePart || 'all'}.pdf`;
+    doc.save(fileName);
+  };
+
+  const handleExportWashReportPdf = () => {
+    if (!washReportData) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    const maxLineWidth = pageWidth - margin * 2;
+    let y = 20;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Raport myjni - Myjnia PB', margin, y);
+    y += 8;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(toPdfText(`Wygenerowano: ${new Date().toLocaleString('pl-PL')}`), margin, y);
+    y += 6;
+    doc.text(toPdfText(`Okres: ${getPeriodLabel(reportPeriod)}`), margin, y);
+    y += 6;
+    doc.text(toPdfText(getPeriodDetails()), margin, y);
+    y += 10;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Podsumowanie', margin, y);
+    y += 7;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.text(`Przychod: ${washReportData.totalRevenue.toFixed(2)} zl`, margin, y);
+    y += 6;
+    doc.text(`Liczba myc: ${washReportData.totalCount}`, margin, y);
+    y += 10;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Zrealizowane mycia', margin, y);
+    y += 7;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+
+    washReportData.washes.forEach((entry, index) => {
+      const customerName = entry.customer ? `${entry.customer.firstName} ${entry.customer.lastName}` : 'Niezarejestrowany';
+      const line = `${index + 1}. ${new Date(entry.date).toLocaleString('pl-PL')} | ${entry.serviceType} | ${entry.servicePrice.toFixed(2)} zl | Klient: ${customerName}`;
+      const wrapped = doc.splitTextToSize(toPdfText(line), maxLineWidth);
+      const nextY = y + wrapped.length * 5;
+      if (nextY > 285) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(wrapped, margin, y);
+      y += wrapped.length * 5 + 1;
+    });
+
+    const safeDatePart = reportDateStr.substring(0, 10).replace(/[^0-9-]/g, '-');
+    const fileName = `raport-myjnia-${reportPeriod}-${safeDatePart || 'all'}.pdf`;
+    doc.save(fileName);
+  };
+
+  const handleExportMonitoringReportPdf = () => {
+    if (!monitoringReportData) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    const maxLineWidth = pageWidth - margin * 2;
+    let y = 20;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Raport monitoringu - Myjnia PB', margin, y);
+    y += 8;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(toPdfText(`Wygenerowano: ${new Date().toLocaleString('pl-PL')}`), margin, y);
+    y += 6;
+    doc.text(toPdfText(`Okres: ${getPeriodLabel(reportPeriod)}`), margin, y);
+    y += 6;
+    doc.text(toPdfText(getPeriodDetails()), margin, y);
+    y += 10;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Podsumowanie', margin, y);
+    y += 7;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.text(`Liczba odczytow: ${monitoringReportData.totalReadings}`, margin, y);
+    y += 6;
+    doc.text(`Liczba alertow: ${monitoringReportData.alertEvents}`, margin, y);
+    y += 10;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Historia odczytow', margin, y);
+    y += 7;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+
+    const groupedByTimestamp = monitoringReportData.readings.reduce<Record<string, typeof monitoringReportData.readings>>(
+      (acc, entry) => {
+        const date = new Date(entry.createdAt);
+        const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(entry);
+        return acc;
+      },
+      {}
+    );
+
+    const groupEntries = Object.entries(groupedByTimestamp).sort(
+      (a, b) =>
+        new Date(b[1][0]?.createdAt ?? '').getTime() - new Date(a[1][0]?.createdAt ?? '').getTime()
+    );
+
+    groupEntries.forEach(([_, entries], groupIndex) => {
+      const groupDate = entries[0]?.createdAt;
+      const headerLine = `${groupIndex + 1}. Data i godzina: ${new Date(groupDate).toLocaleString('pl-PL')}`;
+      const wrappedHeader = doc.splitTextToSize(toPdfText(headerLine), maxLineWidth);
+      const nextHeaderY = y + wrappedHeader.length * 5;
+      if (nextHeaderY > 285) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.text(wrappedHeader, margin, y);
+      y += wrappedHeader.length * 5 + 1;
+
+      doc.setFont('helvetica', 'normal');
+      entries
+        .slice()
+        .sort((a, b) => a.tankLabel.localeCompare(b.tankLabel, 'pl'))
+        .forEach((entry) => {
+          const levelLabel = entry.level !== null ? `${entry.level.toFixed(2)} L` : '-';
+          const pressureLabel = entry.pressure !== null ? `${entry.pressure.toFixed(2)} bar` : '-';
+          const temperatureLabel = entry.temperature !== null ? `${entry.temperature.toFixed(2)} C` : '-';
+          const line = `- ${entry.tankLabel} | Poziom: ${levelLabel} | Cisnienie: ${pressureLabel} | Temperatura: ${temperatureLabel} | ${entry.alertStatus}`;
+          const wrapped = doc.splitTextToSize(toPdfText(line), maxLineWidth);
+          const nextY = y + wrapped.length * 5;
+          if (nextY > 285) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(wrapped, margin + 4, y);
+          y += wrapped.length * 5 + 1;
+        });
+
+      y += 2;
+    });
+
+    const safeDatePart = reportDateStr.substring(0, 10).replace(/[^0-9-]/g, '-');
+    const fileName = `raport-monitoring-${reportPeriod}-${safeDatePart || 'all'}.pdf`;
     doc.save(fileName);
   };
 
@@ -123,17 +283,60 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
       {activeTab === 'raporty' && (
         <div className="card">
           <div className="flex-space-between mb-20" style={{ alignItems: 'center' }}>
-            <h3 style={{ margin: 0 }}>Raporty sprzedaży</h3>
+            <h3 style={{ margin: 0 }}>
+              {reportKind === 'sales' && 'Raport sprzedaży'}
+              {reportKind === 'wash' && 'Raport myjni'}
+              {reportKind === 'monitoring' && 'Raport monitoringu'}
+            </h3>
             <div className="form-inline">
+              <label className="form-label">Typ:</label>
+              <select
+                className="select-field"
+                value={reportKind}
+                onChange={e => {
+                  const selectedKind = e.target.value as OwnerReportKind;
+                  setReportKind(selectedKind);
+                  if (selectedKind === 'sales') fetchReports(reportPeriod, reportDateStr);
+                  if (selectedKind === 'wash') fetchWashReports(reportPeriod, reportDateStr);
+                  if (selectedKind === 'monitoring') fetchMonitoringReports(reportPeriod, reportDateStr);
+                }}
+              >
+                <option value="sales">Sprzedaż</option>
+                <option value="wash">Myjnia</option>
+                <option value="monitoring">Monitoring</option>
+              </select>
               <label className="form-label">Okres:</label>
-              <select className="select-field" value={reportPeriod} onChange={e => { const p = e.target.value as ReportPeriodType; setReportPeriod(p); fetchReports(p, reportDateStr); }}>
+              <select
+                className="select-field"
+                value={reportPeriod}
+                onChange={e => {
+                  const p = e.target.value as ReportPeriodType;
+                  setReportPeriod(p);
+                  if (reportKind === 'sales') fetchReports(p, reportDateStr);
+                  if (reportKind === 'wash') fetchWashReports(p, reportDateStr);
+                  if (reportKind === 'monitoring') fetchMonitoringReports(p, reportDateStr);
+                }}
+              >
                 <option value="all">Cały czas</option><option value="daily">Dzienny</option><option value="weekly">Tygodniowy</option><option value="monthly">Miesięczny</option><option value="yearly">Roczny</option>
               </select>
-              {reportPeriod === 'daily' && <input type="date" className="input-field" value={reportDateStr.substring(0, 10)} onChange={e => handleDateChange(e.target.value)} />}
-              {reportPeriod === 'weekly' && <input type="date" className="input-field" value={reportDateStr.substring(0, 10)} onChange={e => handleDateChange(e.target.value)} />}
-              {reportPeriod === 'monthly' && <input type="month" className="input-field" value={reportDateStr.substring(0, 7)} onChange={e => handleDateChange(e.target.value)} />}
-              {reportPeriod === 'yearly' && <input type="number" min="2020" max="2100" className="input-field" value={reportDateStr.substring(0, 4)} onChange={e => handleDateChange(e.target.value)} />}
-              <button type="button" className="btn btn-primary" onClick={handleExportReportPdf} disabled={!reportData}>
+              {reportPeriod === 'daily' && <input type="date" className="input-field" value={reportDateStr.substring(0, 10)} onChange={e => handleDateChange(e.target.value, reportKind)} />}
+              {reportPeriod === 'weekly' && <input type="date" className="input-field" value={reportDateStr.substring(0, 10)} onChange={e => handleDateChange(e.target.value, reportKind)} />}
+              {reportPeriod === 'monthly' && <input type="month" className="input-field" value={reportDateStr.substring(0, 7)} onChange={e => handleDateChange(e.target.value, reportKind)} />}
+              {reportPeriod === 'yearly' && <input type="number" min="2020" max="2100" className="input-field" value={reportDateStr.substring(0, 4)} onChange={e => handleDateChange(e.target.value, reportKind)} />}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (reportKind === 'sales') handleExportSalesReportPdf();
+                  if (reportKind === 'wash') handleExportWashReportPdf();
+                  if (reportKind === 'monitoring') handleExportMonitoringReportPdf();
+                }}
+                disabled={
+                  (reportKind === 'sales' && !reportData) ||
+                  (reportKind === 'wash' && !washReportData) ||
+                  (reportKind === 'monitoring' && !monitoringReportData)
+                }
+              >
                 Pobierz PDF
               </button>
             </div>
@@ -141,31 +344,95 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
           
           <div className="grid-responsive mb-20">
             <div className="data-box text-center">
-              <h4 style={{ margin: 0, color: '#64748b' }}>Utarg ({reportPeriod === 'all' ? 'Ogółem' : 'Wybrany Okres'})</h4>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#10b981' }}>{reportData?.totalRevenue.toFixed(2)} zł</div>
+              <h4 style={{ margin: 0, color: '#64748b' }}>
+                {reportKind === 'sales' && `Utarg (${reportPeriod === 'all' ? 'Ogółem' : 'Wybrany Okres'})`}
+                {reportKind === 'wash' && `Przychód myjni (${reportPeriod === 'all' ? 'Ogółem' : 'Wybrany Okres'})`}
+                {reportKind === 'monitoring' && 'Liczba odczytów'}
+              </h4>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#10b981' }}>
+                {reportKind === 'sales' && `${reportData?.totalRevenue.toFixed(2) ?? '0.00'} zł`}
+                {reportKind === 'wash' && `${washReportData?.totalRevenue.toFixed(2) ?? '0.00'} zł`}
+                {reportKind === 'monitoring' && `${monitoringReportData?.totalReadings ?? 0}`}
+              </div>
             </div>
             <div className="data-box text-center">
-              <h4 style={{ margin: 0, color: '#64748b' }}>Liczba Transakcji</h4>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#0f172a' }}>{reportData?.totalCount}</div>
+              <h4 style={{ margin: 0, color: '#64748b' }}>
+                {reportKind === 'sales' && 'Liczba transakcji'}
+                {reportKind === 'wash' && 'Liczba zrealizowanych myć'}
+                {reportKind === 'monitoring' && 'Liczba alertów'}
+              </h4>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', marginTop: '10px', color: '#0f172a' }}>
+                {reportKind === 'sales' && `${reportData?.totalCount ?? 0}`}
+                {reportKind === 'wash' && `${washReportData?.totalCount ?? 0}`}
+                {reportKind === 'monitoring' && `${monitoringReportData?.alertEvents ?? 0}`}
+              </div>
             </div>
           </div>
 
-          <h3 className="mt-20">Historia transakcji {reportPeriod === 'all' && '(15 najnowszych)'}</h3>
-          <div className="list-grid">
-            {reportData?.transactions.map(t => (
-              <article key={t.id} className="list-item card-like">
-                <div>
-                  <p className="item-title">{new Date(t.date).toLocaleString()}</p>
-                  <p className="item-meta">Klient: {t.customer ? `${t.customer.firstName} ${t.customer.lastName}` : 'Niezarejestrowany'}</p>
-                  <p className="item-meta">Kasjer: {t.employee.firstName}</p>
-                </div>
-                <div className="summary-values">
-                  <strong>{getTransactionAmountLabel(t.totalAmount, t.paymentMethod, t.pointsUsed)}</strong>
-                  <span>{t.paymentMethod}</span>
-                </div>
-              </article>
-            ))}
-          </div>
+          {reportKind === 'sales' && (
+            <>
+              <h3 className="mt-20">Historia transakcji {reportPeriod === 'all' && '(15 najnowszych)'}</h3>
+              <div className="list-grid">
+                {reportData?.transactions.map(t => (
+                  <article key={t.id} className="list-item card-like">
+                    <div>
+                      <p className="item-title">{new Date(t.date).toLocaleString()}</p>
+                      <p className="item-meta">Klient: {t.customer ? `${t.customer.firstName} ${t.customer.lastName}` : 'Niezarejestrowany'}</p>
+                      <p className="item-meta">Kasjer: {t.employee.firstName}</p>
+                    </div>
+                    <div className="summary-values">
+                      <strong>{getTransactionAmountLabel(t.totalAmount, t.paymentMethod, t.pointsUsed)}</strong>
+                      <span>{t.paymentMethod}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+
+          {reportKind === 'wash' && (
+            <>
+              <h3 className="mt-20">Historia zrealizowanych myć</h3>
+              <div className="list-grid">
+                {washReportData?.washes.map(entry => (
+                  <article key={entry.id} className="list-item card-like">
+                    <div>
+                      <p className="item-title">{new Date(entry.date).toLocaleString()}</p>
+                      <p className="item-meta">Usługa: {entry.serviceType}</p>
+                      <p className="item-meta">Klient: {entry.customer ? `${entry.customer.firstName} ${entry.customer.lastName}` : 'Niezarejestrowany'}</p>
+                    </div>
+                    <div className="summary-values">
+                      <strong>{entry.servicePrice.toFixed(2)} zł</strong>
+                      <span>{entry.status}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+
+          {reportKind === 'monitoring' && (
+            <>
+              <h3 className="mt-20">Historia monitoringu (zbiorniki i alerty)</h3>
+              <div className="list-grid">
+                {monitoringReportData?.readings.map(entry => (
+                  <article key={entry.id} className="list-item card-like">
+                    <div>
+                      <p className="item-title">{entry.tankLabel}</p>
+                      <p className="item-meta">Data i godzina: {new Date(entry.createdAt).toLocaleString()}</p>
+                      <p className="item-meta">Poziom: {formatMonitoringValue(entry.level, 'L')}</p>
+                      <p className="item-meta">Ciśnienie: {formatMonitoringValue(entry.pressure, 'bar')}</p>
+                      <p className="item-meta">Temperatura: {formatMonitoringValue(entry.temperature, 'C')}</p>
+                    </div>
+                    <div className="summary-values">
+                      <strong>{entry.alertStatus}</strong>
+                      <span>{entry.tank}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -208,14 +475,35 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
           </div>
 
           <div className="card">
-            <h3>Stawki punktów za litr</h3>
+            <h3>Stawki punktów</h3>
             <div className="grid-responsive mb-20">
-              <div><label>E95 (pkt/L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerE95} onChange={(e) => handleLoyaltyConfigChange('pointsPerE95', Number(e.target.value))} /></div>
-              <div><label>E98 (pkt/L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerE98} onChange={(e) => handleLoyaltyConfigChange('pointsPerE98', Number(e.target.value))} /></div>
-              <div><label>Diesel (pkt/L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerDiesel} onChange={(e) => handleLoyaltyConfigChange('pointsPerDiesel', Number(e.target.value))} /></div>
-              <div><label>LPG (pkt/L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerLpg} onChange={(e) => handleLoyaltyConfigChange('pointsPerLpg', Number(e.target.value))} /></div>
+              <div><label>E95 (punktów / L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerE95} onChange={(e) => handleLoyaltyConfigChange('pointsPerE95', Number(e.target.value))} /></div>
+              <div><label>E98 (punktów / L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerE98} onChange={(e) => handleLoyaltyConfigChange('pointsPerE98', Number(e.target.value))} /></div>
+              <div><label>Olej napędowy ON (punktów / L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerDiesel} onChange={(e) => handleLoyaltyConfigChange('pointsPerDiesel', Number(e.target.value))} /></div>
+              <div><label>LPG (punktów / L)</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerLpg} onChange={(e) => handleLoyaltyConfigChange('pointsPerLpg', Number(e.target.value))} /></div>
+            </div>
+            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Koszt usług myjni (pkt)</h4>
+            <div className="grid-responsive mb-20">
+              <div><label>Koszt: mycie standardowe</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerStandardWash} onChange={(e) => handleLoyaltyConfigChange('pointsPerStandardWash', Number(e.target.value))} /></div>
+              <div><label>Koszt: mycie z woskowaniem</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.pointsPerWaxWash} onChange={(e) => handleLoyaltyConfigChange('pointsPerWaxWash', Number(e.target.value))} /></div>
             </div>
             <button type="button" className="btn btn-primary" onClick={handleSaveLoyaltyConfig}>Zapisz stawki punktów</button>
+          </div>
+
+          <div className="card">
+            <h3>Zdobywanie punktów lojalnościowych</h3>
+            <div className="grid-responsive mb-20">
+              <div><label>Za 1 litr E95</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerE95} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerE95', Number(e.target.value))} /></div>
+              <div><label>Za 1 litr E98</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerE98} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerE98', Number(e.target.value))} /></div>
+              <div><label>Za 1 litr oleju napędowego ON</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerDiesel} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerDiesel', Number(e.target.value))} /></div>
+              <div><label>Za 1 litr LPG</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerLpg} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerLpg', Number(e.target.value))} /></div>
+            </div>
+            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Za usługi myjni</h4>
+            <div className="grid-responsive mb-20">
+              <div><label>Za mycie standardowe</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerStandardWash} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerStandardWash', Number(e.target.value))} /></div>
+              <div><label>Za mycie z woskowaniem</label><input type="number" min="0" step="1" className="input-field" value={loyaltyConfig.earnPointsPerWaxWash} onChange={(e) => handleLoyaltyConfigChange('earnPointsPerWaxWash', Number(e.target.value))} /></div>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={handleSaveLoyaltyConfig}>Zapisz stawki zyskiwania punktów</button>
           </div>
         </>
       )}
@@ -368,7 +656,16 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
         />
       )}
 
-      {activeTab === 'monitoring' && <MonitoringTab monitoringData={monitoringData} fetchMonitoring={fetchMonitoring} />}
+      {activeTab === 'monitoring' && (
+        <MonitoringTab
+          monitoringData={monitoringData}
+          fetchMonitoring={fetchMonitoring}
+          monitoringConfig={monitoringConfig}
+          canManageConfig
+          onMonitoringConfigChange={handleMonitoringConfigChange}
+          onSaveMonitoringConfig={handleSaveMonitoringConfig}
+        />
+      )}
     </div>
   );
 };

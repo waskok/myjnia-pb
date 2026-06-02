@@ -13,7 +13,7 @@ async function main() {
       data: [
         { type: 'E95', pricePerLiter: 6.00, tankLevel: 5000, maxLevel: 10000 },
         { type: 'E98', pricePerLiter: 6.37, tankLevel: 5000, maxLevel: 10000 },
-        { type: 'Diesel', pricePerLiter: 6.83, tankLevel: 5000, maxLevel: 10000 },
+        { type: 'Olej napędowy ON', pricePerLiter: 6.83, tankLevel: 5000, maxLevel: 10000 },
         { type: 'LPG', pricePerLiter: 3.93, tankLevel: 2000, maxLevel: 5000 }
       ]
     });
@@ -28,12 +28,18 @@ async function main() {
   if (existingLoyalty === 0) {
     await prisma.loyaltyProgram.create({
       data: {
-        pointsPerE95: 2,
-        pointsPerE98: 2,
-        pointsPerDiesel: 2,
-        pointsPerLpg: 1,
-        pointsPerStandardWash: 5,
-        pointsPerWaxWash: 10
+        pointsPerE95: 100,
+        pointsPerE98: 100,
+        pointsPerDiesel: 100,
+        pointsPerLpg: 50,
+        pointsPerStandardWash: 300,
+        pointsPerWaxWash: 400,
+        earnPointsPerE95: 2,
+        earnPointsPerE98: 2,
+        earnPointsPerDiesel: 2,
+        earnPointsPerLpg: 1,
+        earnPointsPerStandardWash: 5,
+        earnPointsPerWaxWash: 10
       }
     });
     console.log('✅ Parametry naliczania punktów lojalnościowych zostały ustawione!');

@@ -6,11 +6,13 @@ import { CustomerPanel } from './components/CustomerPanel';
 import { EmployeePanel } from './components/EmployeePanel';
 import { OwnerPanel } from './components/OwnerPanel';
 import { Toast } from './components/Toast';
+import { PublicPricing } from './components/PublicPricing';
+import { PublicLoyaltyProgramPage } from './components/PublicLoyaltyProgram';
 import heroImage from './assets/MyjniaPB.jpg';
 
 function App() {
   const appLogic = useAppLogic();
-  const [publicPage, setPublicPage] = useState<'home' | 'auth'>('home');
+  const [publicPage, setPublicPage] = useState<'home' | 'pricing' | 'loyalty' | 'auth'>('home');
   type EmployeeTab = 'pos' | 'rezerwacje' | 'monitoring' | 'lpg' | 'grafik';
   const allowedEmployeeTabs = useMemo(() => {
     if (appLogic.employeeJobRole === 'Kasjer') return ['pos', 'grafik'] as EmployeeTab[];
@@ -32,7 +34,14 @@ function App() {
   } else if (appLogic.userRole === 'employee') {
     panel = <EmployeePanel {...appLogic} />;
   } else if (appLogic.userRole === 'customer') {
-    panel = <CustomerPanel {...appLogic} />;
+    panel =
+      publicPage === 'pricing' ? (
+        <PublicPricing />
+      ) : publicPage === 'loyalty' ? (
+        <PublicLoyaltyProgramPage />
+      ) : (
+        <CustomerPanel {...appLogic} />
+      );
   } else {
     panel = publicPage === 'home' ? (
       <div className="card home-card">
@@ -46,6 +55,10 @@ function App() {
           Zarezerwuj termin online albo zaloguj się do odpowiedniej strefy, aby zarządzać swoim kontem.
         </p>
       </div>
+    ) : publicPage === 'pricing' ? (
+      <PublicPricing />
+    ) : publicPage === 'loyalty' ? (
+      <PublicLoyaltyProgramPage />
     ) : (
       <AuthScreen {...appLogic} />
     );
@@ -69,6 +82,21 @@ function App() {
       >
         Strona główna
       </button>
+      <button
+        type="button"
+        className={`tab-btn-large ${publicPage === 'pricing' ? 'tab-active-primary' : 'tab-inactive'}`}
+        onClick={() => setPublicPage('pricing')}
+      >
+        Cennik
+      </button>
+      <button
+        type="button"
+        className={`tab-btn-large ${publicPage === 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`}
+        onClick={() => setPublicPage('loyalty')}
+      >
+        Program lojalnościowy
+      </button>
+      <span className="nav-divider-vertical" aria-hidden="true" />
       <button
         type="button"
         className={`tab-btn-large ${publicPage === 'auth' && appLogic.loginMode === 'customer' ? 'tab-active-primary' : 'tab-inactive'}`}
@@ -95,10 +123,9 @@ function App() {
 
   const customerButtons = (
     <>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'book' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('book')}>Umów mycie auta</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'resHistory' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('resHistory')}>Moje rezerwacje</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'buyHistory' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('buyHistory')}>Historia zakupów</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'contact' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('contact')}>Kontakt</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'book' && publicPage !== 'pricing' && publicPage !== 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => { setPublicPage('home'); appLogic.setActiveCustTab('book'); }}>Umów mycie auta</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'resHistory' && publicPage !== 'pricing' && publicPage !== 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => { setPublicPage('home'); appLogic.setActiveCustTab('resHistory'); }}>Moje rezerwacje</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'buyHistory' && publicPage !== 'pricing' && publicPage !== 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => { setPublicPage('home'); appLogic.setActiveCustTab('buyHistory'); }}>Historia zakupów</button>
       <button type="button" className="btn btn-danger" onClick={appLogic.logout}>Wyloguj</button>
     </>
   );
@@ -219,13 +246,29 @@ function App() {
               </button>
             )}
             {appLogic.userRole === 'customer' && (
-              <span className="navbar-loyalty-inline">
-                Twoje punkty lojalnościowe: <strong>{appLogic.loyaltyPoints}</strong>
-              </span>
+              <>
+                <span className="navbar-loyalty-inline">
+                  Twoje punkty lojalnościowe: <strong>{appLogic.loyaltyPoints}</strong>
+                </span>
+                <button
+                  type="button"
+                  className={`tab-btn-large ${publicPage === 'pricing' ? 'tab-active-primary' : 'tab-inactive'}`}
+                  onClick={() => setPublicPage('pricing')}
+                >
+                  Cennik
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn-large ${publicPage === 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`}
+                  onClick={() => setPublicPage('loyalty')}
+                >
+                  Program lojalnościowy
+                </button>
+              </>
             )}
             {appLogic.userRole === 'employee' && appLogic.loggedInUser && (
               <span className="navbar-employee-inline">
-                Zalogowano jako: <strong>{`${appLogic.loggedInUser} ${appLogic.loggedInUser.charAt(0)} - ${appLogic.employeeJobRole ?? 'Pracownik'}`}</strong>
+                Zalogowano jako: <strong>{`${appLogic.loggedInUser}${appLogic.loggedInUserLastInitial ? ` ${appLogic.loggedInUserLastInitial}` : ''} - ${appLogic.employeeJobRole ?? 'Pracownik'}`}</strong>
               </span>
             )}
           </div>
