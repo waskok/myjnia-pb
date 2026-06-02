@@ -20,6 +20,8 @@ interface LoyaltyRates {
   pointsPerE98: number;
   pointsPerDiesel: number;
   pointsPerLpg: number;
+  pointsPerStandardWash: number;
+  pointsPerWaxWash: number;
 }
 
 const router = Router();
@@ -263,8 +265,8 @@ router.get('/owner/loyalty-config', async (req, res) => {
           pointsPerE98: 100,
           pointsPerDiesel: 100,
           pointsPerLpg: 50,
-          pointsPerStandardWash: 10,
-          pointsPerWaxWash: 20
+          pointsPerStandardWash: 300,
+          pointsPerWaxWash: 400
         }
       });
     }
@@ -273,7 +275,9 @@ router.get('/owner/loyalty-config', async (req, res) => {
       pointsPerE95: loyalty.pointsPerE95,
       pointsPerE98: loyalty.pointsPerE98,
       pointsPerDiesel: loyalty.pointsPerDiesel,
-      pointsPerLpg: loyalty.pointsPerLpg
+      pointsPerLpg: loyalty.pointsPerLpg,
+      pointsPerStandardWash: loyalty.pointsPerStandardWash,
+      pointsPerWaxWash: loyalty.pointsPerWaxWash
     });
   } catch (error) {
     console.error(error);
@@ -289,12 +293,21 @@ router.patch('/owner/loyalty-config', async (req, res) => {
     const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
     if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
 
-    const { pointsPerE95, pointsPerE98, pointsPerDiesel, pointsPerLpg } = req.body as Partial<LoyaltyRates>;
+    const {
+      pointsPerE95,
+      pointsPerE98,
+      pointsPerDiesel,
+      pointsPerLpg,
+      pointsPerStandardWash,
+      pointsPerWaxWash
+    } = req.body as Partial<LoyaltyRates & { pointsPerStandardWash: number; pointsPerWaxWash: number }>;
     const normalized = {
       pointsPerE95: Math.floor(Number(pointsPerE95)),
       pointsPerE98: Math.floor(Number(pointsPerE98)),
       pointsPerDiesel: Math.floor(Number(pointsPerDiesel)),
-      pointsPerLpg: Math.floor(Number(pointsPerLpg))
+      pointsPerLpg: Math.floor(Number(pointsPerLpg)),
+      pointsPerStandardWash: Math.floor(Number(pointsPerStandardWash)),
+      pointsPerWaxWash: Math.floor(Number(pointsPerWaxWash))
     };
 
     if (Object.values(normalized).some((v) => !Number.isFinite(v) || v < 0)) {
@@ -310,8 +323,8 @@ router.patch('/owner/loyalty-config', async (req, res) => {
       : await prisma.loyaltyProgram.create({
           data: {
             ...normalized,
-            pointsPerStandardWash: 10,
-            pointsPerWaxWash: 20
+            pointsPerStandardWash: 300,
+            pointsPerWaxWash: 400
           }
         });
 
@@ -320,7 +333,9 @@ router.patch('/owner/loyalty-config', async (req, res) => {
       pointsPerE95: loyalty.pointsPerE95,
       pointsPerE98: loyalty.pointsPerE98,
       pointsPerDiesel: loyalty.pointsPerDiesel,
-      pointsPerLpg: loyalty.pointsPerLpg
+      pointsPerLpg: loyalty.pointsPerLpg,
+      pointsPerStandardWash: loyalty.pointsPerStandardWash,
+      pointsPerWaxWash: loyalty.pointsPerWaxWash
     });
   } catch (error) {
     console.error(error);
@@ -419,7 +434,9 @@ router.get('/owner/reports', async (req, res) => {
       pointsPerE95: loyalty?.pointsPerE95 ?? 100,
       pointsPerE98: loyalty?.pointsPerE98 ?? 100,
       pointsPerDiesel: loyalty?.pointsPerDiesel ?? 100,
-      pointsPerLpg: loyalty?.pointsPerLpg ?? 50
+      pointsPerLpg: loyalty?.pointsPerLpg ?? 50,
+      pointsPerStandardWash: loyalty?.pointsPerStandardWash ?? 300,
+      pointsPerWaxWash: loyalty?.pointsPerWaxWash ?? 400
     };
 
     res.json({
@@ -682,6 +699,30 @@ router.patch('/owner/services/:id/price', async (req, res) => {
     res.status(200).json({ message: 'Cena usługi myjni została zaktualizowana!' });
   } catch (error) {
     res.status(500).json({ error: 'Błąd podczas aktualizacji ceny usługi.' });
+  }
+});
+
+router.patch('/owner/services/:id/loyalty-points', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Brak autoryzacji!' });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
+    if (decoded.role !== 'owner') return res.status(403).json({ error: 'Brak uprawnień!' });
+
+    const { loyaltyPoints } = req.body as { loyaltyPoints?: number };
+    const normalizedPoints = Math.floor(Number(loyaltyPoints));
+    if (!Number.isFinite(normalizedPoints) || normalizedPoints < 0) {
+      return res.status(400).json({ error: 'Podaj poprawną, nieujemną liczbę punktów.' });
+    }
+
+    await prisma.washService.update({
+      where: { id: Number(req.params.id) },
+      data: { loyaltyPoints: normalizedPoints }
+    });
+    res.status(200).json({ message: 'Liczba punktów za usługę została zaktualizowana!' });
+  } catch (error) {
+    res.status(500).json({ error: 'Błąd podczas aktualizacji punktów usługi.' });
   }
 });
 

@@ -82,7 +82,7 @@ export interface MonitoringReportData {
 export type OwnerReportKind = 'sales' | 'wash' | 'monitoring';
 
 export type ReportPeriodType = 'all' | 'daily' | 'weekly' | 'monthly' | 'yearly';
-export type ActiveCustTab = 'book' | 'resHistory' | 'buyHistory' | 'contact';
+export type ActiveCustTab = 'book' | 'resHistory' | 'buyHistory';
 
 export interface ScheduleEntry {
   id: number;

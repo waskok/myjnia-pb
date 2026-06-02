@@ -88,60 +88,42 @@ export function PublicLoyaltyProgramPage() {
         <h3 style={{ marginTop: 0 }}>
           Program lojalnościowy{' '}
           <span className="text-muted" style={{ fontWeight: 600 }}>
-            - Tu sprawdzisz ile punktów zdobywasz oraz ile punktów potrzeba na wybrane produkty/usługi.
+            - Sprawdź, ile punktów lojalnościowych zdobywasz za zakupy paliw i usług myjni.
           </span>
         </h3>
 
         {error && <div className="alert-box alert-danger mb-15">{error}</div>}
 
-        <div className="grid-responsive" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+        <div className="list-grid">
           <section>
-            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Zdobywanie punktów</h4>
-
+            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Paliwa - zdobywanie punktów</h4>
             <div className="grid-responsive mb-20">
               {fuelRates.map((f) => (
                 <div key={f.id} className="data-box">
                   <p className="item-title">{f.type}</p>
-                  <p className="item-meta">{loyalty ? `${f.rate} pkt/L` : '—'}</p>
+                  <p className="points-earned-text">+{f.rate} punktów lojalnościowych / litr</p>
                 </div>
               ))}
               {fuelRates.length === 0 && (
                 <div className="data-box">
                   <p className="item-title">Paliwa</p>
-                  <p className="item-meta">{loyalty ? 'Brak paliw do wyświetlenia.' : '—'}</p>
+                  <p className="item-meta">Brak paliw do wyświetlenia.</p>
                 </div>
               )}
             </div>
+          </section>
 
-            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Punkty za usługi myjni</h4>
+          <section>
+            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Usługi myjni - zdobywanie punktów</h4>
             <div className="list-grid">
               {sortedServices.map((service) => (
                 <article key={service.id} className="list-item card-like">
                   <div>
                     <p className="item-title">{service.type}</p>
-                    <p className="item-meta">Zdobywasz: +{service.loyaltyPoints} pkt</p>
+                    <p className="points-earned-text">+{service.loyaltyPoints} punktów lojalnościowych</p>
                   </div>
                 </article>
               ))}
-            </div>
-          </section>
-
-          <section>
-            <h4 style={{ margin: '0 0 10px', color: '#334155' }}>Wydawanie punktów</h4>
-
-            <div className="grid-responsive mb-20">
-              <div className="data-box">
-                <p className="item-title">Paliwo (płatność punktami)</p>
-                <p className="item-meta">Koszt = litry × stawka pkt/L (wg typu paliwa)</p>
-              </div>
-              <div className="data-box">
-                <p className="item-title">Mycie standardowe</p>
-                <p className="item-meta">{loyalty ? `${loyalty.pointsPerStandardWash} pkt` : '—'}</p>
-              </div>
-              <div className="data-box">
-                <p className="item-title">Mycie z woskowaniem</p>
-                <p className="item-meta">{loyalty ? `${loyalty.pointsPerWaxWash} pkt` : '—'}</p>
-              </div>
             </div>
           </section>
         </div>

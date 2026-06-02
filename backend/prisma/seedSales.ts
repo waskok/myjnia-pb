@@ -32,8 +32,8 @@ async function main() {
         pointsPerE98: 2,
         pointsPerDiesel: 2,
         pointsPerLpg: 1,
-        pointsPerStandardWash: 5,
-        pointsPerWaxWash: 10
+        pointsPerStandardWash: 300,
+        pointsPerWaxWash: 400
       }
     });
     console.log('✅ Parametry naliczania punktów lojalnościowych zostały ustawione!');

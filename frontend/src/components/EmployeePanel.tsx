@@ -55,7 +55,7 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
 
           {posVerifiedCustomer && (
              <div className="alert-box alert-success mb-15">
-                <strong>Zweryfikowano:</strong> {posVerifiedCustomer.firstName} | <strong>Dostępne punkty:</strong> {posVerifiedCustomer.loyaltyPoints} pkt
+                <strong>Zweryfikowano:</strong> {posVerifiedCustomer.firstName} | <strong>Dostępne punkty:</strong> {posVerifiedCustomer.loyaltyPoints} punktów lojalnościowych
              </div>
           )}
 
@@ -76,7 +76,12 @@ export const EmployeePanel: React.FC<AppLogic> = (props) => {
             </div>
             
             <div className="points-badge my-15" style={{ background: '#f1f5f9', color: '#0f172a', padding: '15px' }}>
-              <span style={{ fontSize: '18px' }}>Do zapłaty: <strong>{costPLN} zł</strong></span> {posVerifiedCustomer && (<span> albo <strong style={{ color: '#10b981' }}>{costPoints} pkt</strong></span>)}
+              <span style={{ fontSize: '18px' }}>Do zapłaty: <strong>{costPLN} zł</strong></span>{' '}
+              {posVerifiedCustomer && (
+                <span className="points-cost-text">
+                  lub Koszt: {costPoints} punktów lojalnościowych
+                </span>
+              )}
             </div>
 
             <div className="pos-step-card">

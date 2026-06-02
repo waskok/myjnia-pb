@@ -34,7 +34,14 @@ function App() {
   } else if (appLogic.userRole === 'employee') {
     panel = <EmployeePanel {...appLogic} />;
   } else if (appLogic.userRole === 'customer') {
-    panel = <CustomerPanel {...appLogic} />;
+    panel =
+      publicPage === 'pricing' ? (
+        <PublicPricing />
+      ) : publicPage === 'loyalty' ? (
+        <PublicLoyaltyProgramPage />
+      ) : (
+        <CustomerPanel {...appLogic} />
+      );
   } else {
     panel = publicPage === 'home' ? (
       <div className="card home-card">
@@ -116,10 +123,9 @@ function App() {
 
   const customerButtons = (
     <>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'book' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('book')}>Umów mycie auta</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'resHistory' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('resHistory')}>Moje rezerwacje</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'buyHistory' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('buyHistory')}>Historia zakupów</button>
-      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'contact' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => appLogic.setActiveCustTab('contact')}>Kontakt</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'book' && publicPage !== 'pricing' && publicPage !== 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => { setPublicPage('home'); appLogic.setActiveCustTab('book'); }}>Umów mycie auta</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'resHistory' && publicPage !== 'pricing' && publicPage !== 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => { setPublicPage('home'); appLogic.setActiveCustTab('resHistory'); }}>Moje rezerwacje</button>
+      <button type="button" className={`tab-btn-large ${appLogic.activeCustTab === 'buyHistory' && publicPage !== 'pricing' && publicPage !== 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`} onClick={() => { setPublicPage('home'); appLogic.setActiveCustTab('buyHistory'); }}>Historia zakupów</button>
       <button type="button" className="btn btn-danger" onClick={appLogic.logout}>Wyloguj</button>
     </>
   );
@@ -240,9 +246,25 @@ function App() {
               </button>
             )}
             {appLogic.userRole === 'customer' && (
-              <span className="navbar-loyalty-inline">
-                Twoje punkty lojalnościowe: <strong>{appLogic.loyaltyPoints}</strong>
-              </span>
+              <>
+                <span className="navbar-loyalty-inline">
+                  Twoje punkty lojalnościowe: <strong>{appLogic.loyaltyPoints}</strong>
+                </span>
+                <button
+                  type="button"
+                  className={`tab-btn-large ${publicPage === 'pricing' ? 'tab-active-primary' : 'tab-inactive'}`}
+                  onClick={() => setPublicPage('pricing')}
+                >
+                  Cennik
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn-large ${publicPage === 'loyalty' ? 'tab-active-primary' : 'tab-inactive'}`}
+                  onClick={() => setPublicPage('loyalty')}
+                >
+                  Program lojalnościowy
+                </button>
+              </>
             )}
             {appLogic.userRole === 'employee' && appLogic.loggedInUser && (
               <span className="navbar-employee-inline">

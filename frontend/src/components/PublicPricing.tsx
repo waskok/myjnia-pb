@@ -1,9 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Fuel, WashService } from '../types';
 
+type PublicLoyaltyProgram = {
+  pointsPerE95: number;
+  pointsPerE98: number;
+  pointsPerDiesel: number;
+  pointsPerLpg: number;
+  pointsPerStandardWash: number;
+  pointsPerWaxWash: number;
+};
+
+function getFuelPointsRate(fuelType: string, loyalty: PublicLoyaltyProgram): number {
+  const type = fuelType.toUpperCase();
+  if (type.includes('LPG')) return loyalty.pointsPerLpg;
+  if (type.includes('98')) return loyalty.pointsPerE98;
+  if (type.includes('DIESEL') || type.includes('ON')) return loyalty.pointsPerDiesel;
+  return loyalty.pointsPerE95;
+}
+
 export function PublicPricing() {
   const [fuels, setFuels] = useState<Fuel[]>([]);
   const [services, setServices] = useState<WashService[]>([]);
+  const [loyalty, setLoyalty] = useState<PublicLoyaltyProgram | null>(null);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
@@ -12,20 +30,24 @@ export function PublicPricing() {
     async function load() {
       setError('');
       try {
-        const [fuelsRes, servicesRes] = await Promise.all([
+        const [fuelsRes, servicesRes, loyaltyRes] = await Promise.all([
           fetch('http://localhost:5000/api/fuels'),
           fetch('http://localhost:5000/api/services'),
+          fetch('http://localhost:5000/api/loyalty-program'),
         ]);
 
         const fuelsJson = await fuelsRes.json();
         const servicesJson = await servicesRes.json();
+        const loyaltyJson = await loyaltyRes.json();
 
         if (!fuelsRes.ok) throw new Error(fuelsJson?.error || 'Nie udało się pobrać paliw.');
         if (!servicesRes.ok) throw new Error(servicesJson?.error || 'Nie udało się pobrać usług.');
+        if (!loyaltyRes.ok) throw new Error(loyaltyJson?.error || 'Nie udało się pobrać programu lojalnościowego.');
 
         if (cancelled) return;
         setFuels(fuelsJson as Fuel[]);
         setServices(servicesJson as WashService[]);
+        setLoyalty(loyaltyJson as PublicLoyaltyProgram);
       } catch (e) {
         if (cancelled) return;
         const message = e instanceof Error ? e.message : 'Błąd połączenia z serwerem.';
@@ -70,7 +92,15 @@ export function PublicPricing() {
                   <div className="summary-values">
                     <strong className="price-inline">
                       <span className="price-amount">{Number(f.pricePerLiter).toFixed(2)} zł</span>
-                      <span className="price-unit">/L</span>
+                      {loyalty && (
+                        <>
+                          <span className="price-unit"> lub </span>
+                          <span className="points-alt-text">
+                            {getFuelPointsRate(f.type, loyalty)} punktów lojalnościowych
+                          </span>
+                        </>
+                      )}
+                      <span className="price-unit"> /L</span>
                     </strong>
                   </div>
                 </article>
@@ -89,6 +119,18 @@ export function PublicPricing() {
                   <div className="summary-values">
                     <strong className="price-inline">
                       <span className="price-amount">{Number(service.price).toFixed(2)} zł</span>
+                      {service.type.toLowerCase().includes('standard') && (
+                        <>
+                          <span className="price-unit"> lub </span>
+                          <span className="points-alt-text">{loyalty?.pointsPerStandardWash ?? 300} punktów lojalnościowych</span>
+                        </>
+                      )}
+                      {service.type.toLowerCase().includes('wosk') && (
+                        <>
+                          <span className="price-unit"> lub </span>
+                          <span className="points-alt-text">{loyalty?.pointsPerWaxWash ?? 400} punktów lojalnościowych</span>
+                        </>
+                      )}
                     </strong>
                   </div>
                 </article>

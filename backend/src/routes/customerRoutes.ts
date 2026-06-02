@@ -89,8 +89,8 @@ router.get('/loyalty-program', async (req, res) => {
           pointsPerE98: 100,
           pointsPerDiesel: 100,
           pointsPerLpg: 50,
-          pointsPerStandardWash: 10,
-          pointsPerWaxWash: 20,
+          pointsPerStandardWash: 300,
+          pointsPerWaxWash: 400,
         },
       });
     }
@@ -113,7 +113,13 @@ router.get('/loyalty-program', async (req, res) => {
 
 router.post('/reservations', async (req, res) => {
   try {
-    const { token, washServiceId, date } = req.body;
+    const { token, washServiceId, date, paymentMode, pointsCost } = req.body as {
+      token?: string;
+      washServiceId?: number | string;
+      date?: string;
+      paymentMode?: 'cash' | 'points';
+      pointsCost?: number;
+    };
     if (!token || !washServiceId || !date) return res.status(400).json({ error: 'Brakujące dane rezerwacji!' });
 
     const reservationDate = new Date(date);
@@ -142,9 +148,58 @@ router.post('/reservations', async (req, res) => {
     }
 
     const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as TokenPayload;
-    await prisma.reservation.create({
-      data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: reservationDate, status: 'Oczekująca' }
-    });
+
+    if (paymentMode === 'points') {
+      const service = await prisma.washService.findUnique({
+        where: { id: Number(washServiceId) },
+        select: { id: true, type: true }
+      });
+      if (!service) {
+        return res.status(404).json({ error: 'Nie znaleziono wybranej usługi myjni.' });
+      }
+
+      const loyalty = await prisma.loyaltyProgram.findFirst();
+      const defaultStandard = 300;
+      const defaultWax = 400;
+      const normalizedType = service.type.toLowerCase();
+      const expectedPoints =
+        normalizedType.includes('wosk')
+          ? loyalty?.pointsPerWaxWash ?? defaultWax
+          : loyalty?.pointsPerStandardWash ?? defaultStandard;
+
+      const pointsToDeduct = Number(pointsCost ?? expectedPoints);
+      if (!Number.isFinite(pointsToDeduct) || pointsToDeduct <= 0) {
+        return res.status(400).json({ error: 'Nieprawidłowa liczba punktów dla rezerwacji.' });
+      }
+      if (pointsToDeduct !== expectedPoints) {
+        return res.status(400).json({ error: 'Nieprawidłowy koszt punktowy dla wybranej usługi.' });
+      }
+
+      const customer = await prisma.customer.findUnique({
+        where: { id: decoded.id },
+        select: { id: true, loyaltyPoints: true }
+      });
+      if (!customer) {
+        return res.status(404).json({ error: 'Nie znaleziono klienta.' });
+      }
+      if (customer.loyaltyPoints < pointsToDeduct) {
+        return res.status(400).json({ error: `Za mało punktów. Wymagane: ${pointsToDeduct} pkt.` });
+      }
+
+      await prisma.$transaction([
+        prisma.customer.update({
+          where: { id: decoded.id },
+          data: { loyaltyPoints: { decrement: pointsToDeduct } }
+        }),
+        prisma.reservation.create({
+          data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: reservationDate, status: 'Oczekująca' }
+        })
+      ]);
+    } else {
+      await prisma.reservation.create({
+        data: { customerId: decoded.id, washServiceId: Number(washServiceId), date: reservationDate, status: 'Oczekująca' }
+      });
+    }
 
     res.status(201).json({ message: 'Złożono rezerwację.' });
   } catch (error) {
