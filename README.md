@@ -130,6 +130,8 @@ Backend: [http://localhost:5000](http://localhost:5000)
 | frontend | `npm run dev` | Vite dev server |
 | frontend | `npm run build` | Build produkcyjny |
 | frontend | `npm run lint` | ESLint |
+| frontend | `npm test` | Testy UI (Vitest + Testing Library, bez przeglądarki) |
+| frontend | `npm run test:watch` | Testy frontend w trybie watch |
 | backend | `npm test` | Testy automatyczne (Vitest) |
 | backend | `npm run test:watch` | Testy w trybie watch |
 
@@ -167,6 +169,15 @@ Testy API (na bazie `test_myjnia` / Neon) obejmują m.in.:
 Łącznie ok. **74 testy** (`npm test`).
 
 Bez `.env.test` testy API są **pomijane**; walidatory i tak się uruchamiają.
+
+### Frontend (Vitest + React Testing Library)
+
+```bash
+cd frontend
+npm test
+```
+
+Ok. **34 testy**: hooki (`useAuth`, `useCustomer`, `useReservations`), komponenty (`Toast`, `AuthScreen`, `CustomerPanel`, `PublicPricing`), `apiClient`, `pdfGenerator`. **Bez Playwright** — mock API, bez backendu (szybkie, ~8 s).
 
 ## Konta testowe (po seedzie)
 

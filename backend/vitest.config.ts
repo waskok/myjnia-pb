@@ -3,6 +3,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    /** Pełne drzewo: plik → describe → każdy it() z nazwą */
+    reporters: [['verbose', { summary: true }]],
     slowTestThreshold: 1000,
     include: ['src/**/*.test.ts'],
     setupFiles: ['src/test/setup.ts'],
