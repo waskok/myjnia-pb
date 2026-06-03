@@ -33,25 +33,49 @@ export const AuthScreen: React.FC<AppLogic> = (props) => {
 
                 {isIndividual ? (
                   <>
-                    <input name="firstName" className="input-field" placeholder="Imię" value={formData.firstName} onChange={handleCustomerChange} required />
-                    <input name="lastName" className="input-field" placeholder="Nazwisko" value={formData.lastName} onChange={handleCustomerChange} required />
-                    <input name="pesel" className="input-field" placeholder="PESEL" value={formData.pesel} onChange={handleCustomerChange} required maxLength={11} />
-                    <input name="nip" className="input-field" placeholder="NIP (opcjonalnie)" value={formData.nip} onChange={handleCustomerChange} maxLength={10} />
+                    <input name="firstName" className="input-field" placeholder="Imię" value={formData.firstName} onChange={handleCustomerChange} required pattern="[A-Za-zĄąĆćĘęŁłŃńÓóŚśŹźŻż\\s-]+" />
+                    <input name="lastName" className="input-field" placeholder="Nazwisko" value={formData.lastName} onChange={handleCustomerChange} required pattern="[A-Za-zĄąĆćĘęŁłŃńÓóŚśŹźŻż\\s-]+" />
+                    <input name="pesel" className="input-field" placeholder="PESEL" value={formData.pesel} onChange={handleCustomerChange} required minLength={11} maxLength={11} pattern="\d{11}" />
+                    <input name="nip" className="input-field" placeholder="NIP (opcjonalnie)" value={formData.nip} onChange={handleCustomerChange} minLength={10} maxLength={10} pattern="\d{10}" />
                   </>
                 ) : (
                   <>
-                    <input name="companyName" className="input-field" placeholder="Nazwa firmy" value={formData.companyName} onChange={handleCustomerChange} required />
-                    <input name="nip" className="input-field" placeholder="NIP" value={formData.nip} onChange={handleCustomerChange} required maxLength={10} />
-                    <input name="regon" className="input-field" placeholder="REGON" value={formData.regon} onChange={handleCustomerChange} required maxLength={14} />
+                    <input name="companyName" className="input-field" placeholder="Nazwa firmy" value={formData.companyName} onChange={handleCustomerChange} required minLength={3} />
+                    <input name="nip" className="input-field" placeholder="NIP" value={formData.nip} onChange={handleCustomerChange} required minLength={10} maxLength={10} pattern="\d{10}" />
+                    <input name="regon" className="input-field" placeholder="REGON" value={formData.regon} onChange={handleCustomerChange} required minLength={9} maxLength={14} pattern="\d{9}|\d{14}" />
                   </>
                 )}
 
-                <input name="address" className="input-field" placeholder="Adres" value={formData.address} onChange={handleCustomerChange} required />
-                <input name="phone" className="input-field" placeholder="Telefon" value={formData.phone} onChange={handleCustomerChange} required />
+                <input name="address" className="input-field" placeholder="Adres" value={formData.address} onChange={handleCustomerChange} required minLength={6} />
+                <div className="phone-input-wrap">
+                  <span className="phone-prefix">+48</span>
+                  <input name="phone" className="input-field phone-input" placeholder="123456789" value={formData.phone} onChange={handleCustomerChange} required minLength={9} maxLength={9} pattern="\d{9}" inputMode="numeric" />
+                </div>
               </>
             )}
-            <input name="email" type="email" className="input-field" placeholder="E-mail" value={formData.email} onChange={handleCustomerChange} required />
-            <input name="password" type="password" className="input-field" placeholder="Hasło" value={formData.password} onChange={handleCustomerChange} required />
+            <input name="email" type="email" className="input-field" placeholder="E-mail (np. nazwa@domena.pl)" value={formData.email} onChange={handleCustomerChange} required />
+            <input
+              name="password"
+              type="password"
+              className="input-field"
+              placeholder={isLogin ? 'Hasło' : 'Hasło (min. 8 znaków)'}
+              value={formData.password}
+              onChange={handleCustomerChange}
+              required
+              {...(!isLogin ? { minLength: 8 } : {})}
+            />
+            {!isLogin && (
+              <input
+                name="confirmPassword"
+                type="password"
+                className="input-field"
+                placeholder="Powtórz hasło (min. 8 znaków)"
+                value={formData.confirmPassword}
+                onChange={handleCustomerChange}
+                required
+                minLength={8}
+              />
+            )}
             <button type="submit" className="btn btn-success">{isLogin ? 'Zaloguj' : 'Załóż konto'}</button>
           </form>
           {isLogin ? (

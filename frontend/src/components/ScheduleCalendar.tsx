@@ -43,7 +43,7 @@ export interface ScheduleCalendarProps {
 
 export const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
   readOnly = false,
-  title = 'Grafik pracowników 📅',
+  title = 'Grafik pracowników',
   hint,
   scheduleYear,
   scheduleMonth,
@@ -68,8 +68,8 @@ export const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
   const monthLabel = `${MONTH_NAMES[scheduleMonth - 1]} ${scheduleYear}`;
   const monthInputValue = `${scheduleYear}-${pad(scheduleMonth)}`;
   const defaultHint = readOnly
-    ? 'Podgląd grafiku całego zespołu — tylko do odczytu.'
-    : 'Kliknij dzień, aby go zaznaczyć (możesz wybrać wiele). Następnie wybierz pracownika i godzinę startu, i zapisz.';
+    ? 'Grafik pracowników.'
+    : 'Kliknij dzień, aby go zaznaczyć (możesz wybrać wiele). Następnie wybierz pracownika, godziny i zapisz.';
 
   return (
     <>
@@ -133,7 +133,7 @@ export const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({
                       onClick={(e) => e.stopPropagation()}
                     >
                       <span className="schedule-entry-text" title={`${entry.employee.firstName} ${entry.employee.lastName} (${entry.employee.role})`}>
-                        {entry.startTime} {entry.employee.firstName} {entry.employee.lastName.charAt(0)}.
+                        {entry.startTime}-{entry.endTime} {entry.employee.firstName} {entry.employee.lastName.charAt(0)}.
                       </span>
                       {!readOnly && onDeleteEntry && (
                         <button
