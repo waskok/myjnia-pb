@@ -1,17 +1,10 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../createApp.js';
-import prisma from '../../prismaClient.js';
 import { isApiTestDbConfigured } from '../env.js';
+import { SEED_CUSTOMER, SEED_EMPLOYEE, SEED_OWNER } from './helpers.js';
 
 const app = createApp({ rateLimit: false });
-
-const SEED_CUSTOMER = {
-  email: 'piotr.kowalczyk@example.pl',
-  password: 'Klient1234!',
-};
-const SEED_OWNER = { login: 'owner', password: 'Admin1234!' };
-const SEED_EMPLOYEE = { login: 'kasjer01', password: 'Pracownik1!' };
 
 const runApiTests = isApiTestDbConfigured();
 
@@ -153,12 +146,9 @@ describe.skipIf(!runApiTests)('Protected customer API', () => {
     await agent.post('/api/login').send(SEED_CUSTOMER).expect(200);
 
     const res = await agent.get('/api/my-profile').expect(200);
-    expect(res.body.email).toBe(SEED_CUSTOMER.email);
+    expect(res.body).toMatchObject({
+      firstName: 'Piotr',
+      loyaltyPoints: expect.any(Number),
+    });
   });
 });
-
-if (runApiTests) {
-  afterAll(async () => {
-    await prisma.$disconnect();
-  });
-}

@@ -155,7 +155,16 @@ cd backend
 npm test
 ```
 
-Testy API obejmują m.in. logowanie klienta/pracownika/właściciela, `/api/me`, wylogowanie, rejestrację i chronione endpointy (`401` bez cookie).
+Testy API (na bazie `test_myjnia` / Neon) obejmują m.in.:
+
+- **Publiczne:** `/api/services`, `/api/loyalty-program`, `/api/fuels`
+- **Klient:** rezerwacja (gotówka / punkty), za mało punktów, `my-reservations`
+- **Pracownik:** POS (karta, faktura, za mało punktów), myjnia (lista, anulowanie), monitoring, grafik
+- **Właściciel:** pracownicy, klienci, cena paliwa, dostawy, raporty, lojalność, grafik, monitoring
+- **Uprawnienia:** `403` (kasjer ≠ owner, klient ≠ employee, config monitoringu tylko owner)
+- **Edge:** archiwalny pracownik nie loguje się (`403`), limit logowania (`429`)
+
+Łącznie ok. **74 testy** (`npm test`).
 
 Bez `.env.test` testy API są **pomijane**; walidatory i tak się uruchamiają.
 

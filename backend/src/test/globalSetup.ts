@@ -19,6 +19,7 @@ export default async function globalSetup(): Promise<void> {
   const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const env = { ...process.env };
 
-  execSync('npx prisma migrate deploy', { cwd: backendRoot, env, stdio: 'inherit' });
+  // Projekt bez folderu migrations — schemat wgrywamy przez db push
+  execSync('npx prisma db push --skip-generate', { cwd: backendRoot, env, stdio: 'inherit' });
   execSync('npx prisma db seed', { cwd: backendRoot, env, stdio: 'inherit' });
 }

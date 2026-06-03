@@ -10,11 +10,13 @@ export function loadTestEnv(): void {
   dotenv.config({ path: path.join(backendRoot, '.env'), quiet: true });
 }
 
-/** Baza testowa — nazwa bazy lub jawna flaga RUN_API_TESTS. */
+/** Baza testowa — nazwa z "_test" w URL lub jawna flaga RUN_API_TESTS (np. Neon). */
 export function isApiTestDbConfigured(): boolean {
   const url = process.env.DATABASE_URL ?? '';
-  if (process.env.RUN_API_TESTS === 'true') return Boolean(url);
-  return /_test\b|\/test\b|database=test/i.test(url);
+  if (!url) return false;
+  if (process.env.RUN_API_TESTS === 'true') return true;
+  // np. myjnia_pb_test, /test_myjnia (Neon), /test?...
+  return /_test\b|\/test[\w_-]/i.test(url) || /database=test/i.test(url);
 }
 
 export function assertApiTestDatabase(): void {
