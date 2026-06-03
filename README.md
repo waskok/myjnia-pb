@@ -130,6 +130,54 @@ Backend: [http://localhost:5000](http://localhost:5000)
 | frontend | `npm run dev` | Vite dev server |
 | frontend | `npm run build` | Build produkcyjny |
 | frontend | `npm run lint` | ESLint |
+| frontend | `npm test` | Testy UI (Vitest + Testing Library, bez przeglądarki) |
+| frontend | `npm run test:watch` | Testy frontend w trybie watch |
+| backend | `npm test` | Testy automatyczne (Vitest) |
+| backend | `npm run test:watch` | Testy w trybie watch |
+
+## Testy automatyczne
+
+### Faza 1 — walidatory (bez bazy)
+
+```bash
+cd backend
+npm test
+```
+
+Sprawdza schematy Zod (rejestracja, logowanie, cennik, grafik itd.).
+
+### Faza 2 — API (wymaga bazy testowej)
+
+1. Utwórz osobną bazę PostgreSQL, np. `myjnia_pb_test`.
+2. Skopiuj `backend/.env.test.example` → `backend/.env.test` i uzupełnij `DATABASE_URL` (nazwa bazy musi zawierać `_test`, np. `myjnia_pb_test`).
+3. Uruchom testy — przed testami API wykonywane są `prisma migrate deploy` i `seed`:
+
+```bash
+cd backend
+npm test
+```
+
+Testy API (na bazie `test_myjnia` / Neon) obejmują m.in.:
+
+- **Publiczne:** `/api/services`, `/api/loyalty-program`, `/api/fuels`
+- **Klient:** rezerwacja (gotówka / punkty), za mało punktów, `my-reservations`
+- **Pracownik:** POS (karta, faktura, za mało punktów), myjnia (lista, anulowanie), monitoring, grafik
+- **Właściciel:** pracownicy, klienci, cena paliwa, dostawy, raporty, lojalność, grafik, monitoring
+- **Uprawnienia:** `403` (kasjer ≠ owner, klient ≠ employee, config monitoringu tylko owner)
+- **Edge:** archiwalny pracownik nie loguje się (`403`), limit logowania (`429`)
+
+Łącznie ok. **74 testy** (`npm test`).
+
+Bez `.env.test` testy API są **pomijane**; walidatory i tak się uruchamiają.
+
+### Frontend (Vitest + React Testing Library)
+
+```bash
+cd frontend
+npm test
+```
+
+Ok. **34 testy**: hooki (`useAuth`, `useCustomer`, `useReservations`), komponenty (`Toast`, `AuthScreen`, `CustomerPanel`, `PublicPricing`), `apiClient`, `pdfGenerator`. **Bez Playwright** — mock API, bez backendu (szybkie, ~8 s).
 
 ## Konta testowe (po seedzie)
 
