@@ -130,6 +130,34 @@ Backend: [http://localhost:5000](http://localhost:5000)
 | frontend | `npm run dev` | Vite dev server |
 | frontend | `npm run build` | Build produkcyjny |
 | frontend | `npm run lint` | ESLint |
+| backend | `npm test` | Testy automatyczne (Vitest) |
+| backend | `npm run test:watch` | Testy w trybie watch |
+
+## Testy automatyczne
+
+### Faza 1 — walidatory (bez bazy)
+
+```bash
+cd backend
+npm test
+```
+
+Sprawdza schematy Zod (rejestracja, logowanie, cennik, grafik itd.).
+
+### Faza 2 — API (wymaga bazy testowej)
+
+1. Utwórz osobną bazę PostgreSQL, np. `myjnia_pb_test`.
+2. Skopiuj `backend/.env.test.example` → `backend/.env.test` i uzupełnij `DATABASE_URL` (nazwa bazy musi zawierać `_test`, np. `myjnia_pb_test`).
+3. Uruchom testy — przed testami API wykonywane są `prisma migrate deploy` i `seed`:
+
+```bash
+cd backend
+npm test
+```
+
+Testy API obejmują m.in. logowanie klienta/pracownika/właściciela, `/api/me`, wylogowanie, rejestrację i chronione endpointy (`401` bez cookie).
+
+Bez `.env.test` testy API są **pomijane**; walidatory i tak się uruchamiają.
 
 ## Konta testowe (po seedzie)
 
