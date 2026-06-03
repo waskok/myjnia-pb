@@ -26,7 +26,14 @@ function App() {
     if (appLogic.userRole !== 'employee') return;
     if (allowedEmployeeTabs.includes(appLogic.activeEmpTab)) return;
     appLogic.setActiveEmpTab(allowedEmployeeTabs[0]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only correct tab when role/tabs change
   }, [appLogic.userRole, appLogic.activeEmpTab, appLogic.setActiveEmpTab, allowedEmployeeTabs]);
+
+  useEffect(() => {
+    if (appLogic.userRole === 'customer') {
+      setPublicPage((page) => (page === 'auth' ? 'home' : page));
+    }
+  }, [appLogic.userRole]);
 
   let panel;
   if (appLogic.userRole === 'owner') {
@@ -288,7 +295,7 @@ function App() {
           </div>
         </footer>
       )}
-      <Toast message={appLogic.message} onDismiss={appLogic.clearMessage} />
+      <Toast key={appLogic.message || 'idle'} message={appLogic.message} onDismiss={appLogic.clearMessage} />
     </div>
   );
 }

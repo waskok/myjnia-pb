@@ -1,169 +1,109 @@
 import { useState, useCallback, useEffect } from 'react';
-import type {
-  WashService,
-  Reservation,
-  Transaction,
-  Fuel,
-  Customer,
-  Delivery,
-  Employee,
-  MonitoringData,
-  MonitoringConfig,
-  ReportData,
-  ReportPeriodType,
-  ActiveCustTab,
-  ScheduleMonthData,
-  WashReportData,
-  MonitoringReportData,
-  OwnerReportKind
-} from '../types';
-import { jsPDF } from 'jspdf';
+import type { Fuel, WashService, ActiveCustTab } from '../types';
 
-type EmployeeJobRole = 'Kasjer' | 'Monitoring' | 'Obsługa Myjni' | 'Obsługa dystrybutora LPG';
-type SessionRole = 'customer' | 'employee' | 'owner';
-type StoredSession = {
-  firstName: string;
-  lastName?: string;
-  role: SessionRole;
-  jobRole?: EmployeeJobRole;
-};
-
-type LoyaltyConfig = {
-  pointsPerE95: number;
-  pointsPerE98: number;
-  pointsPerDiesel: number;
-  pointsPerLpg: number;
-  pointsPerStandardWash: number;
-  pointsPerWaxWash: number;
-  earnPointsPerE95: number;
-  earnPointsPerE98: number;
-  earnPointsPerDiesel: number;
-  earnPointsPerLpg: number;
-  earnPointsPerStandardWash: number;
-  earnPointsPerWaxWash: number;
-};
-
-type MonitoringConfigState = MonitoringConfig;
-
-type GeneratedInvoice = {
-  number: string;
-  issueDate: string;
-  amount: number;
-  paymentMethod: string;
-  quantity: number;
-  fuelType: string;
-  unitPrice: number;
-  buyer: {
-    name: string;
-    address: string;
-    email: string;
-    phone: string;
-    type: 'individual' | 'company';
-    identifiers: {
-      pesel?: string;
-      nip?: string;
-      regon?: string;
-    };
-  };
-};
+import { useAuth } from './useAuth';
+import { useCustomer } from './useCustomer';
+import { useReservations } from './useReservations';
+import { usePos } from './usePos';
+import { useAdminPanel } from './useAdminPanel';
+import { useMonitoring } from './useMonitoring';
+import { useSchedule } from './useSchedule';
 
 export const useAppLogic = () => {
   const [message, setMessage] = useState('');
   const clearMessage = useCallback(() => setMessage(''), []);
-  const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
-  const [loggedInUserLastInitial, setLoggedInUserLastInitial] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<'customer' | 'employee' | 'owner' | null>(null);
-  const [employeeJobRole, setEmployeeJobRole] = useState<EmployeeJobRole | null>(null);
-  
-  const [activeTab, setActiveTab] = useState<'cennik' | 'dostawy' | 'pracownicy' | 'klienci' | 'monitoring' | 'raporty' | 'grafik'>('cennik');
-  const [activeEmpTab, setActiveEmpTab] = useState<'pos' | 'rezerwacje' | 'monitoring' | 'lpg' | 'grafik'>('pos');
-  const [activeCustTab, setActiveCustTab] = useState<ActiveCustTab>('book');
 
+  const [fuels, setFuels] = useState<Fuel[]>([]);
+  const [services, setServices] = useState<WashService[]>([]);
+
+  const [activeEmpTab, setActiveEmpTab] = useState<
+    'pos' | 'rezerwacje' | 'monitoring' | 'lpg' | 'grafik'
+  >('pos');
+  const [activeCustTab, setActiveCustTab] = useState<ActiveCustTab>('book');
   const [empResDateFilter, setEmpResDateFilter] = useState('');
   const [empResPhoneFilter, setEmpResPhoneFilter] = useState('');
 
-  const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({
-    accountType: 'individual' as 'individual' | 'company',
-    firstName: '',
-    lastName: '',
-    companyName: '',
-    address: '',
-    phone: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    pesel: '',
-    nip: '',
-    regon: '',
+  const auth = useAuth(setMessage);
+  const customer = useCustomer();
+  const admin = useAdminPanel(setMessage, setFuels, setServices);
+  const monitoring = useMonitoring(setMessage);
+  const schedule = useSchedule(setMessage, auth.userRole);
+  const reservations = useReservations(setMessage, customer.loyaltyPoints, setServices, () => {
+    void customer.fetchCustomerProfile();
+    void customer.fetchMyTransactions();
   });
-  const [services, setServices] = useState<WashService[]>([]);
-  const [selectedService, setSelectedService] = useState('');
-  const [reservationDate, setReservationDate] = useState('');
-  const [myReservations, setMyReservations] = useState<Reservation[]>([]);
+  const pos = usePos(setMessage, () => void admin.fetchFuels());
 
-  const [loyaltyPoints, setLoyaltyPoints] = useState<number>(0);
-  const [myTransactions, setMyTransactions] = useState<Transaction[]>([]);
+  const [allReservations, setAllReservations] = useState<import('../types').Reservation[]>([]);
 
-  const [loginMode, setLoginMode] = useState<'customer' | 'staff'>('customer');
-  const [staffData, setStaffData] = useState({ login: '', password: '' });
-  const [allReservations, setAllReservations] = useState<Reservation[]>([]);
-  const [fuels, setFuels] = useState<Fuel[]>([]);
-  
-  const [posData, setPosData] = useState({ fuelId: '', quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false });
-  const [posCustomerQuery, setPosCustomerQuery] = useState('');
-  const [posVerifiedCustomer, setPosVerifiedCustomer] = useState<Customer | null>(null);
+  const fetchAllReservations = async () => {
+    const { api } = await import('../utils/apiClient');
+    const res = await api.get('/api/employee/reservations');
+    if (res.ok) setAllReservations((await res.json()) as import('../types').Reservation[]);
+  };
 
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [newDelivery, setNewDelivery] = useState({ fuelId: '', quantity: 1000, supplier: '', deliveryDate: '' });
-  const [newPrice, setNewPrice] = useState<{ [key: number]: number }>({});
-  const [newServicePrice, setNewServicePrice] = useState<{ [key: number]: number }>({});
-  const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig>({
-    pointsPerE95: 100,
-    pointsPerE98: 100,
-    pointsPerDiesel: 100,
-    pointsPerLpg: 50,
-    pointsPerStandardWash: 300,
-    pointsPerWaxWash: 400,
-    earnPointsPerE95: 2,
-    earnPointsPerE98: 2,
-    earnPointsPerDiesel: 2,
-    earnPointsPerLpg: 1,
-    earnPointsPerStandardWash: 5,
-    earnPointsPerWaxWash: 10
-  });
-  const [customerWashPointsCost, setCustomerWashPointsCost] = useState({
-    standard: 300,
-    wax: 400
-  });
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [newEmployee, setNewEmployee] = useState({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' });
-  const [monitoringData, setMonitoringData] = useState<MonitoringData | null>(null);
-  const [monitoringConfig, setMonitoringConfig] = useState<MonitoringConfigState>({
-    samplingIntervalSec: 300,
-    fuelLowLevelPercent: 20,
-    fuelMaxPressureBar: 2.5,
-    fuelMaxTempC: 35,
-    lpgLowLevelPercent: 20,
-    lpgMaxPressureBar: 14,
-    lpgMaxTempC: 30
-  });
-  
-  const [reportData, setReportData] = useState<ReportData | null>(null);
-  const [washReportData, setWashReportData] = useState<WashReportData | null>(null);
-  const [monitoringReportData, setMonitoringReportData] = useState<MonitoringReportData | null>(null);
-  const [reportPeriod, setReportPeriod] = useState<ReportPeriodType>('all');
-  const [reportDateStr, setReportDateStr] = useState<string>(new Date().toISOString().substring(0, 10));
+  const handleCompleteReservation = async (id: number) => {
+    const { api } = await import('../utils/apiClient');
+    const res = await api.patch(`/api/employee/reservations/${id}/complete`);
+    if (res.ok) {
+      setMessage('✅ Zakończono!');
+      await fetchAllReservations();
+    }
+  };
 
-  const now = new Date();
-  const [scheduleYear, setScheduleYear] = useState(now.getFullYear());
-  const [scheduleMonth, setScheduleMonth] = useState(now.getMonth() + 1);
-  const [scheduleData, setScheduleData] = useState<ScheduleMonthData | null>(null);
-  const [selectedScheduleDates, setSelectedScheduleDates] = useState<string[]>([]);
-  const [scheduleEmployeeId, setScheduleEmployeeId] = useState('');
-  const [scheduleStartTime, setScheduleStartTime] = useState('08:00');
-  const [scheduleEndTime, setScheduleEndTime] = useState('16:00');
+  const handleCancelReservation = async (id: number) => {
+    if (!window.confirm('Czy na pewno chcesz anulować tę rezerwację?')) return;
+    const { api } = await import('../utils/apiClient');
+    const res = await api.patch(`/api/employee/reservations/${id}/cancel`);
+    if (res.ok) {
+      setMessage('✅ Rezerwacja anulowana!');
+      await fetchAllReservations();
+    }
+  };
+
+  useEffect(() => {
+    const { userRole, employeeJobRole } = auth;
+    if (!userRole) return;
+
+    if (userRole === 'owner') {
+      admin.setActiveTab('cennik');
+      void admin.fetchFuels();
+      void admin.fetchServices();
+      void admin.fetchDeliveries();
+      void admin.fetchEmployees();
+      void admin.fetchCustomers();
+      void admin.fetchLoyaltyConfig();
+    } else if (userRole === 'employee') {
+      if (employeeJobRole === 'Kasjer') {
+        setActiveEmpTab('pos');
+        void admin.fetchFuels();
+      } else if (employeeJobRole === 'Monitoring') {
+        setActiveEmpTab('monitoring');
+        void monitoring.fetchMonitoring();
+      } else if (employeeJobRole === 'Obsługa dystrybutora LPG') {
+        setActiveEmpTab('lpg');
+        void monitoring.fetchMonitoring();
+      } else if (employeeJobRole === 'Obsługa Myjni') {
+        setActiveEmpTab('rezerwacje');
+        void fetchAllReservations();
+      } else {
+        setActiveEmpTab('grafik');
+      }
+    } else if (userRole === 'customer') {
+      void reservations.fetchServices();
+      void customer.fetchCustomerProfile();
+      void customer.fetchMyTransactions();
+      void reservations.fetchMyReservations();
+      void customer.fetchLoyaltyRates();
+    }
+    // Intentionally only re-run when role changes (not when hook identities change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.userRole, auth.employeeJobRole]);
+
+  useEffect(() => {
+    if (fuels.length > 0) pos.initPosWithFuels(fuels);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fuels]);
 
   const getMinDateTime = () => {
     const now = new Date();
@@ -172,810 +112,39 @@ export const useAppLogic = () => {
   };
 
   const getStatusColor = (status: string) => {
-    if (status === 'Zakończona') return '#28a745'; 
-    if (status === 'Anulowana') return '#dc3545';  
-    if (status === 'Oczekująca') return '#ffc107'; 
+    if (status === 'Zakończona') return '#28a745';
+    if (status === 'Anulowana') return '#dc3545';
+    if (status === 'Oczekująca') return '#ffc107';
     return '#334155';
   };
 
-  const toPdfText = (value: string) => {
-    const polishMap: Record<string, string> = {
-      ą: 'a', ć: 'c', ę: 'e', ł: 'l', ń: 'n', ó: 'o', ś: 's', ź: 'z', ż: 'z',
-      Ą: 'A', Ć: 'C', Ę: 'E', Ł: 'L', Ń: 'N', Ó: 'O', Ś: 'S', Ź: 'Z', Ż: 'Z',
-    };
-    return value.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, (char) => polishMap[char] ?? char);
+  return {
+    message,
+    clearMessage,
+    fuels,
+    services,
+    activeEmpTab,
+    setActiveEmpTab,
+    activeCustTab,
+    setActiveCustTab,
+    empResDateFilter,
+    setEmpResDateFilter,
+    empResPhoneFilter,
+    setEmpResPhoneFilter,
+    allReservations,
+    fetchAllReservations,
+    handleCompleteReservation,
+    handleCancelReservation,
+    getMinDateTime,
+    getStatusColor,
+    ...auth,
+    ...customer,
+    ...reservations,
+    ...pos,
+    ...admin,
+    ...monitoring,
+    ...schedule,
   };
-
-  const formatMoney = (value: number) => `${value.toFixed(2)} PLN`;
-
-  const downloadInvoicePdf = (invoice: GeneratedInvoice) => {
-    const vatRatePercent = 23;
-    const vatRate = vatRatePercent / 100;
-    const grossValue = invoice.amount;
-    const netValue = grossValue / (1 + vatRate);
-    const vatValue = grossValue - netValue;
-    const unitGross = invoice.unitPrice;
-    const unitNet = unitGross / (1 + vatRate);
-    const unitVat = unitGross - unitNet;
-
-    const buyerIdentifiers: string[] = [];
-    if (invoice.buyer.identifiers.pesel) buyerIdentifiers.push(`PESEL: ${invoice.buyer.identifiers.pesel}`);
-    if (invoice.buyer.identifiers.nip) buyerIdentifiers.push(`NIP: ${invoice.buyer.identifiers.nip}`);
-    if (invoice.buyer.identifiers.regon) buyerIdentifiers.push(`REGON: ${invoice.buyer.identifiers.regon}`);
-
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const margin = 12;
-    let y = 16;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('FAKTURA VAT', margin, y);
-    y += 8;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(toPdfText(`Numer: ${invoice.number}`), margin, y);
-    y += 5;
-    doc.text(toPdfText(`Data wystawienia: ${new Date(invoice.issueDate).toLocaleString('pl-PL')}`), margin, y);
-    y += 8;
-
-    doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText('Sprzedawca:'), margin, y);
-    doc.text(toPdfText('Nabywca:'), 110, y);
-    y += 5;
-
-    doc.setFont('helvetica', 'normal');
-    const sellerLines = [
-      'Myjnia PB',
-      toPdfText('ul. Jana Pawła II 37, 31-864 Kraków'),
-      'Telefon/fax: (070) 012-34-56, (070)-011-22-33',
-      'NIP: 123123123',
-      'REGON: 938274615',
-    ];
-    const buyerLines = [
-      toPdfText(invoice.buyer.name),
-      toPdfText(invoice.buyer.address),
-      toPdfText(`Email: ${invoice.buyer.email}`),
-      toPdfText(`Telefon: ${invoice.buyer.phone}`),
-      ...buyerIdentifiers.map((line) => toPdfText(line)),
-    ];
-
-    sellerLines.forEach((line, idx) => doc.text(line, margin, y + idx * 5));
-    buyerLines.forEach((line, idx) => doc.text(line, 110, y + idx * 5));
-    y += Math.max(sellerLines.length, buyerLines.length) * 5 + 6;
-
-    const tableX = margin;
-    const colWidths = [10, 56, 18, 30, 14, 28, 30];
-    const headers = ['Lp', 'Nazwa', 'Ilosc', 'Cena netto', 'VAT', 'Kwota VAT', 'Wartosc brutto'];
-    const row = [
-      '1',
-      toPdfText(`Paliwo ${invoice.fuelType}`),
-      `${invoice.quantity.toFixed(2)} L`,
-      formatMoney(unitNet * invoice.quantity),
-      `${vatRatePercent}%`,
-      formatMoney(unitVat * invoice.quantity),
-      formatMoney(grossValue),
-    ];
-
-    const drawRow = (startY: number, values: string[], bold = false) => {
-      let x = tableX;
-      const rowHeight = 8;
-      doc.setFont('helvetica', bold ? 'bold' : 'normal');
-      for (let i = 0; i < colWidths.length; i += 1) {
-        const width = colWidths[i] ?? 0;
-        const value = values[i] ?? '';
-        doc.rect(x, startY, width, rowHeight);
-        const align: 'left' | 'right' = i >= 2 ? 'right' : 'left';
-        doc.text(value, align === 'right' ? x + width - 1.5 : x + 1.5, startY + 5.2, { align });
-        x += width;
-      }
-      return startY + rowHeight;
-    };
-
-    y = drawRow(y, headers, true);
-    y = drawRow(y, row, false);
-    y += 8;
-
-    doc.setFont('helvetica', 'normal');
-    doc.text(toPdfText(`Razem netto: ${formatMoney(netValue)}`), 128, y);
-    y += 5;
-    doc.text(toPdfText(`Razem VAT (${vatRatePercent}%): ${formatMoney(vatValue)}`), 128, y);
-    y += 5;
-    doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText(`Do zaplaty (brutto): ${formatMoney(grossValue)}`), 128, y);
-    y += 5;
-    doc.setFont('helvetica', 'normal');
-    doc.text(toPdfText(`Metoda płatności: ${invoice.paymentMethod}`), 128, y);
-
-    doc.save(`${invoice.number.replace(/[\\/]/g, '-')}.pdf`);
-  };
-
-  const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    if (name === 'phone') {
-      const digitsOnly = value.replace(/\D/g, '').slice(0, 9);
-      setFormData({ ...formData, phone: digitsOnly });
-      return;
-    }
-    setFormData({ ...formData, [name]: value });
-  };
-  const handleStaffChange = (e: React.ChangeEvent<HTMLInputElement>) => setStaffData({ ...staffData, [e.target.name]: e.target.value });
-  const handleDeliveryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setNewDelivery({ ...newDelivery, [e.target.name]: e.target.value });
-  const handlePosChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') setPosData({ ...posData, [name]: (e.target as HTMLInputElement).checked });
-    else setPosData({ ...posData, [name]: value });
-  };
-
-  const fetchServices = async () => { try { const res = await fetch('http://localhost:5000/api/services'); const data = await res.json(); setServices(data); if (data.length > 0) setSelectedService(String(data[0].id)); } catch (e) { console.error(e); } };
-  const fetchFuels = async () => { try { const res = await fetch('http://localhost:5000/api/fuels'); const data = await res.json(); setFuels(data); if (data.length > 0) { setPosData(prev => ({ ...prev, fuelId: String(data[0].id) })); setNewDelivery(prev => ({ ...prev, fuelId: String(data[0].id) })); } } catch (e) { console.error(e); } };
-  
-  const fetchCustomerData = async (token: string) => { 
-    try {
-      fetchServices();
-      const resRes = await fetch('http://localhost:5000/api/my-reservations', { headers: { 'Authorization': `Bearer ${token}` } }); 
-      if (resRes.ok) setMyReservations(await resRes.json()); 
-      const transRes = await fetch('http://localhost:5000/api/my-transactions', { headers: { 'Authorization': `Bearer ${token}` } });
-      if (transRes.ok) setMyTransactions(await transRes.json());
-      const profRes = await fetch('http://localhost:5000/api/my-profile', { headers: { 'Authorization': `Bearer ${token}` } });
-      if (profRes.ok) { const profData = await profRes.json(); setLoyaltyPoints(profData.loyaltyPoints); }
-      const loyaltyRes = await fetch('http://localhost:5000/api/loyalty-program');
-      if (loyaltyRes.ok) {
-        const loyaltyData = await loyaltyRes.json() as Partial<LoyaltyConfig>;
-        setCustomerWashPointsCost({
-          standard: Number(loyaltyData.pointsPerStandardWash) || 300,
-          wax: Number(loyaltyData.pointsPerWaxWash) || 400
-        });
-      }
-    } catch (e) { console.error(e); } 
-  };
-
-  const fetchAllReservations = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/employee/reservations', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setAllReservations(await res.json()); } catch (e) { console.error(e); } };
-  const fetchDeliveries = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/deliveries', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setDeliveries(await res.json()); } catch (e) { console.error(e); } };
-  const fetchEmployees = async (token: string) => {
-    try {
-      const res = await fetch('http://localhost:5000/api/owner/employees', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = (await res.json()) as Array<Employee & { isActive?: boolean | null }>;
-        setEmployees(
-          data.map((employee) => ({
-            ...employee,
-            // Backward compatibility for responses without isActive.
-            isActive: employee.isActive !== false,
-          }))
-        );
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-  const fetchCustomers = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/customers', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setCustomers(await res.json()); } catch (e) { console.error(e); } };
-  const fetchLoyaltyConfig = async (token: string) => { try { const res = await fetch('http://localhost:5000/api/owner/loyalty-config', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) setLoyaltyConfig(await res.json()); } catch (e) { console.error(e); } };
-  const fetchMonitoring = async (period: '1h' | '24h' | '7d' | '30d' = '24h') => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-      const res = await fetch(`http://localhost:5000/api/monitoring?period=${period}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = (await res.json()) as MonitoringData;
-        setMonitoringData(data);
-        if (data.config) {
-          setMonitoringConfig({
-            samplingIntervalSec: data.config.samplingIntervalSec,
-            fuelLowLevelPercent: data.config.fuelLowLevelPercent,
-            fuelMaxPressureBar: data.config.fuelMaxPressureBar,
-            fuelMaxTempC: data.config.fuelMaxTempC,
-            lpgLowLevelPercent: data.config.lpgLowLevelPercent,
-            lpgMaxPressureBar: data.config.lpgMaxPressureBar,
-            lpgMaxTempC: data.config.lpgMaxTempC
-          });
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleMonitoringConfigChange = (key: keyof MonitoringConfigState, value: number) => {
-    setMonitoringConfig((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleSaveMonitoringConfig = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-      const payload = {
-        samplingIntervalSec: Math.max(15, Math.floor(monitoringConfig.samplingIntervalSec || 0)),
-        fuelLowLevelPercent: Math.max(0, Number(monitoringConfig.fuelLowLevelPercent || 0)),
-        fuelMaxPressureBar: Math.max(0, Number(monitoringConfig.fuelMaxPressureBar || 0)),
-        fuelMaxTempC: Math.max(-50, Number(monitoringConfig.fuelMaxTempC || 0)),
-        lpgLowLevelPercent: Math.max(0, Number(monitoringConfig.lpgLowLevelPercent || 0)),
-        lpgMaxPressureBar: Math.max(0, Number(monitoringConfig.lpgMaxPressureBar || 0)),
-        lpgMaxTempC: Math.max(-50, Number(monitoringConfig.lpgMaxTempC || 0))
-      };
-      const res = await fetch('http://localhost:5000/api/monitoring/config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + (data.message || 'Zaktualizowano konfigurację monitoringu.'));
-        await fetchMonitoring();
-      } else {
-        setMessage('❌ ' + (data.error || 'Nie udało się zaktualizować konfiguracji monitoringu.'));
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-
-  const fetchSchedule = async (year = scheduleYear, month = scheduleMonth) => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    const schedulePath =
-      userRole === 'employee' ? '/api/employee/schedule' : '/api/owner/schedule';
-    try {
-      const res = await fetch(
-        `http://localhost:5000${schedulePath}?year=${year}&month=${month}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const data = await res.json();
-      if (res.ok) {
-        setScheduleData(data);
-        setScheduleYear(data.year);
-        setScheduleMonth(data.month);
-      } else {
-        setMessage('❌ ' + (data.error || 'Błąd pobierania grafiku.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-
-  const changeScheduleMonth = (delta: number) => {
-    let y = scheduleYear;
-    let m = scheduleMonth + delta;
-    if (m < 1) { m = 12; y -= 1; }
-    if (m > 12) { m = 1; y += 1; }
-    setScheduleYear(y);
-    setScheduleMonth(m);
-    setSelectedScheduleDates([]);
-    fetchSchedule(y, m);
-  };
-
-  const handleScheduleMonthInput = (val: string) => {
-    if (!val) return;
-    const [y, m] = val.split('-').map(Number);
-    if (!y || !m) return;
-    setScheduleYear(y);
-    setScheduleMonth(m);
-    setSelectedScheduleDates([]);
-    fetchSchedule(y, m);
-  };
-
-  const toggleScheduleDate = (dateStr: string) => {
-    setSelectedScheduleDates((prev) =>
-      prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr]
-    );
-  };
-
-  const handleSaveSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    if (!scheduleEmployeeId) {
-      setMessage('❌ Wybierz pracownika.');
-      return;
-    }
-    if (selectedScheduleDates.length === 0) {
-      setMessage('❌ Zaznacz co najmniej jeden dzień w kalendarzu.');
-      return;
-    }
-    if (scheduleEndTime <= scheduleStartTime) {
-      setMessage('❌ Godzina zakończenia musi być późniejsza niż rozpoczęcia.');
-      return;
-    }
-    try {
-      const res = await fetch('http://localhost:5000/api/owner/schedule', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          employeeId: Number(scheduleEmployeeId),
-          startTime: scheduleStartTime,
-          endTime: scheduleEndTime,
-          dates: selectedScheduleDates,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + data.message);
-        setSelectedScheduleDates([]);
-        fetchSchedule();
-      } else {
-        setMessage('❌ ' + (data.error || 'Błąd zapisu grafiku.'));
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-
-  const handleDeleteScheduleEntry = async (id: number) => {
-    if (!window.confirm('Usunąć ten wpis z grafiku?')) return;
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-      const res = await fetch(`http://localhost:5000/api/owner/schedule/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + (data.message || 'Usunięto wpis.'));
-        fetchSchedule();
-      } else {
-        setMessage('❌ ' + (data.error || 'Błąd usuwania.'));
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-
-  const fetchReports = async (period = reportPeriod, dateVal = reportDateStr) => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-      let url = 'http://localhost:5000/api/owner/reports';
-      if (period !== 'all') url += `?period=${period}&date=${dateVal}`;
-      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-      if (res.ok) setReportData(await res.json());
-    } catch (e) { console.error(e); }
-  };
-  const fetchWashReports = async (period = reportPeriod, dateVal = reportDateStr) => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-      let url = 'http://localhost:5000/api/owner/reports/wash';
-      if (period !== 'all') url += `?period=${period}&date=${dateVal}`;
-      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-      if (res.ok) setWashReportData(await res.json());
-    } catch (e) { console.error(e); }
-  };
-  const fetchMonitoringReports = async (period = reportPeriod, dateVal = reportDateStr) => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-      let url = 'http://localhost:5000/api/owner/reports/monitoring';
-      if (period !== 'all') url += `?period=${period}&date=${dateVal}`;
-      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-      if (res.ok) setMonitoringReportData(await res.json());
-    } catch (e) { console.error(e); }
-  };
-
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage('Logowanie...');
-    const endpoint = loginMode === 'customer' ? (isLogin ? '/api/login' : '/api/register') : '/api/staff/login';
-    const bodyData = loginMode === 'customer' ? formData : staffData;
-    if (loginMode === 'customer' && !isLogin && formData.password !== formData.confirmPassword) {
-      setMessage('❌ Hasła muszą być takie same.');
-      return;
-    }
-    try {
-      const payload =
-        loginMode === 'customer' && !isLogin
-          ? { ...formData, confirmPassword: undefined }
-          : bodyData;
-      const res = await fetch(`http://localhost:5000${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (res.ok) {
-        if (loginMode === 'customer' && !isLogin) {
-          setMessage('✅ Zarejestrowano pomyślnie! Możesz się teraz zalogować.');
-        } else {
-          setMessage('✅ ' + data.message);
-        }
-        if (loginMode !== 'customer' || isLogin) {
-          const resolvedRole = (data.user.role || 'customer') as SessionRole;
-          localStorage.setItem('token', data.token);
-          const sessionPayload: StoredSession = {
-            firstName: data.user.firstName,
-            lastName: data.user.lastName,
-            role: resolvedRole,
-            jobRole: resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : undefined
-          };
-          localStorage.setItem('sessionUser', JSON.stringify(sessionPayload));
-          setLoggedInUser(data.user.firstName);
-          setLoggedInUserLastInitial(
-            typeof data.user.lastName === 'string' && data.user.lastName.length > 0
-              ? data.user.lastName.charAt(0).toUpperCase()
-              : null
-          );
-          setUserRole(resolvedRole);
-          setEmployeeJobRole(resolvedRole === 'employee' ? (data.user.jobRole as EmployeeJobRole) : null);
-          if (resolvedRole === 'owner') { 
-            setActiveTab('cennik');
-            fetchFuels(); fetchServices(); fetchDeliveries(data.token); fetchEmployees(data.token); fetchCustomers(data.token); fetchLoyaltyConfig(data.token);
-          } else if (resolvedRole === 'employee') { 
-            const role = data.user.jobRole as EmployeeJobRole;
-            if (role === 'Kasjer') {
-              setActiveEmpTab('pos');
-              fetchFuels();
-            } else if (role === 'Monitoring') {
-              setActiveEmpTab('monitoring');
-              fetchMonitoring();
-            } else if (role === 'Obsługa dystrybutora LPG') {
-              setActiveEmpTab('lpg');
-              fetchMonitoring();
-            } else {
-              setActiveEmpTab('rezerwacje');
-              fetchAllReservations(data.token);
-            }
-          } else { fetchCustomerData(data.token); }
-        } else {
-          setIsLogin(true);
-          setFormData({
-            accountType: 'individual',
-            firstName: '',
-            lastName: '',
-            companyName: '',
-            address: '',
-            phone: '',
-            email: formData.email,
-            password: '',
-            confirmPassword: '',
-            pesel: '',
-            nip: '',
-            regon: '',
-          });
-        }
-      } else setMessage('❌ ' + data.error);
-    } catch (e) { console.error(e); setMessage('❌ Błąd połączenia z serwerem!'); }
-  };
-
-  const handleVerifyCustomer = async () => { if (!posCustomerQuery) return; try { const token = localStorage.getItem('token'); const res = await fetch(`http://localhost:5000/api/employee/customer/${encodeURIComponent(posCustomerQuery)}`, { headers: { 'Authorization': `Bearer ${token}` } }); const data = await res.json(); if (res.ok) { setPosVerifiedCustomer(data); setPosData({ ...posData, customerEmail: data.email }); setMessage('✅ Zweryfikowano!'); } else { setPosVerifiedCustomer(null); setPosData({ ...posData, customerEmail: '' }); setMessage('❌ ' + data.error); } } catch (e) { console.error(e); } };
-  const handlePOSSubmit = async (e: React.FormEvent) => { e.preventDefault(); try { const token = localStorage.getItem('token'); if (!token) return; if (posData.issueInvoice && !posVerifiedCustomer) { setMessage('❌ Aby wystawić fakturę, najpierw zweryfikuj klienta (e-mail lub telefon).'); return; } const res = await fetch('http://localhost:5000/api/transactions/fuel', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(posData) }); const data = await res.json(); if (res.ok) { if (data.invoice) { downloadInvoicePdf(data.invoice as GeneratedInvoice); } setMessage('✅ ' + data.message); setPosData({ fuelId: posData.fuelId, quantity: 1, customerEmail: '', paymentMethod: 'Karta', issueInvoice: false }); setPosVerifiedCustomer(null); setPosCustomerQuery(''); fetchFuels(); } else setMessage('❌ ' + data.error); } catch (e) { console.error(e); } };
-  const handleReservation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      if (!selectedService) {
-        setMessage('❌ Wybierz wariant rezerwacji.');
-        return;
-      }
-      if (new Date(reservationDate).getTime() < Date.now()) {
-        setMessage('❌ Nie można rezerwować terminów w przeszłości.');
-        return;
-      }
-
-      const [modeRaw, serviceIdRaw, pointsRaw] = selectedService.split(':');
-      const isPointsPayment = modeRaw === 'points';
-      const washServiceId = isPointsPayment ? Number(serviceIdRaw) : Number(selectedService);
-      const pointsCost = isPointsPayment ? Number(pointsRaw) : 0;
-
-      if (!Number.isFinite(washServiceId) || washServiceId <= 0) {
-        setMessage('❌ Nieprawidłowo wybrana usługa.');
-        return;
-      }
-
-      if (isPointsPayment) {
-        if (!Number.isFinite(pointsCost) || pointsCost <= 0) {
-          setMessage('❌ Nieprawidłowa liczba punktów dla wybranej usługi.');
-          return;
-        }
-        if (loyaltyPoints < pointsCost) {
-          setMessage(`❌ Za mało punktów. Potrzebujesz ${pointsCost} punktów lojalnościowych, a masz ${loyaltyPoints} punktów lojalnościowych.`);
-          return;
-        }
-      }
-
-      const confirmationMessage = isPointsPayment
-        ? 'Czy na pewno chcesz potwierdzić rezerwację opłaconą punktami?\n\nW przypadku anulowania rezerwacji opłaconej punktami punkty nie podlegają zwrotowi.\nUpewnij się, że data i godzina są poprawne.'
-        : 'Czy na pewno chcesz potwierdzić rezerwację?\n\nUpewnij się, że data i godzina są poprawne.';
-      if (!window.confirm(confirmationMessage)) return;
-
-      const res = await fetch('http://localhost:5000/api/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          washServiceId,
-          date: reservationDate,
-          paymentMode: isPointsPayment ? 'points' : 'cash',
-          pointsCost: isPointsPayment ? pointsCost : undefined
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + data.message);
-        setReservationDate('');
-        setSelectedService('');
-        fetchCustomerData(token);
-      } else {
-        setMessage('❌ ' + data.error);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-  const handleCompleteReservation = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Zakończono!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };
-  const handleCancelReservation = async (id: number) => { if (!window.confirm('Czy na pewno chcesz anulować tę rezerwację?')) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/employee/reservations/${id}/cancel`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Rezerwacja anulowana!'); fetchAllReservations(token); } } catch (e) { console.error(e); } };
-  const handleOrderDelivery = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      if (new Date(newDelivery.deliveryDate).getTime() < Date.now()) {
-        setMessage('❌ Nie można zlecić dostawy na datę z przeszłości.');
-        return;
-      }
-      const res = await fetch('http://localhost:5000/api/owner/deliveries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(newDelivery),
-      });
-      if (res.ok) {
-        setMessage('✅ Zlecono!');
-        fetchDeliveries(token);
-        setNewDelivery({ ...newDelivery, deliveryDate: '', supplier: '' });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-  const handleCompleteDelivery = async (id: number) => { try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/deliveries/${id}/complete`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { setMessage('✅ Odebrano!'); fetchDeliveries(token); fetchFuels(); } } catch (e) { console.error(e); } };
-  const handleUpdatePrice = async (id: number) => { if (!newPrice[id]) return; try { const token = localStorage.getItem('token'); if (!token) return; const res = await fetch(`http://localhost:5000/api/owner/fuels/${id}/price`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ price: newPrice[id] }) }); if (res.ok) { setMessage('✅ Zmieniono!'); fetchFuels(); setNewPrice({ ...newPrice, [id]: 0 }); } } catch (e) { console.error(e); } };
-  const handleUpdateServicePrice = async (id: number) => {
-    if (!newServicePrice[id]) return;
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const res = await fetch(`http://localhost:5000/api/owner/services/${id}/price`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ price: newServicePrice[id] })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + (data.message || 'Zmieniono cenę usługi.'));
-        fetchServices();
-        setNewServicePrice({ ...newServicePrice, [id]: 0 });
-      } else {
-        setMessage('❌ ' + (data.error || 'Nie udało się zmienić ceny usługi.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-  const handleLoyaltyConfigChange = (key: keyof LoyaltyConfig, value: number) => {
-    setLoyaltyConfig((prev) => ({ ...prev, [key]: value }));
-  };
-  const handleSaveLoyaltyConfig = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const payload = {
-        pointsPerE95: Math.max(0, Math.floor(loyaltyConfig.pointsPerE95 || 0)),
-        pointsPerE98: Math.max(0, Math.floor(loyaltyConfig.pointsPerE98 || 0)),
-        pointsPerDiesel: Math.max(0, Math.floor(loyaltyConfig.pointsPerDiesel || 0)),
-        pointsPerLpg: Math.max(0, Math.floor(loyaltyConfig.pointsPerLpg || 0)),
-        pointsPerStandardWash: Math.max(0, Math.floor(loyaltyConfig.pointsPerStandardWash || 0)),
-        pointsPerWaxWash: Math.max(0, Math.floor(loyaltyConfig.pointsPerWaxWash || 0)),
-        earnPointsPerE95: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerE95 || 0)),
-        earnPointsPerE98: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerE98 || 0)),
-        earnPointsPerDiesel: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerDiesel || 0)),
-        earnPointsPerLpg: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerLpg || 0)),
-        earnPointsPerStandardWash: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerStandardWash || 0)),
-        earnPointsPerWaxWash: Math.max(0, Math.floor(loyaltyConfig.earnPointsPerWaxWash || 0))
-      };
-      const res = await fetch('http://localhost:5000/api/owner/loyalty-config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setLoyaltyConfig({
-          pointsPerE95: data.pointsPerE95,
-          pointsPerE98: data.pointsPerE98,
-          pointsPerDiesel: data.pointsPerDiesel,
-          pointsPerLpg: data.pointsPerLpg,
-          pointsPerStandardWash: data.pointsPerStandardWash,
-          pointsPerWaxWash: data.pointsPerWaxWash,
-          earnPointsPerE95: data.earnPointsPerE95,
-          earnPointsPerE98: data.earnPointsPerE98,
-          earnPointsPerDiesel: data.earnPointsPerDiesel,
-          earnPointsPerLpg: data.earnPointsPerLpg,
-          earnPointsPerStandardWash: data.earnPointsPerStandardWash,
-          earnPointsPerWaxWash: data.earnPointsPerWaxWash
-        });
-        setMessage('✅ Zaktualizowano stawki punktów.');
-      } else {
-        setMessage('❌ ' + (data.error || 'Nie udało się zaktualizować stawek punktów.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-  const handleAddEmployee = async (e: React.FormEvent) => { e.preventDefault(); const token = localStorage.getItem('token'); try { const res = await fetch('http://localhost:5000/api/owner/employees', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(newEmployee) }); if (res.ok) { setMessage('✅ Dodano!'); setNewEmployee({ firstName: '', lastName: '', role: 'Kasjer', login: '', password: '', email: '', phone: '' }); if(token) fetchEmployees(token); } else { const err = await res.json(); setMessage('❌ ' + err.error); } } catch (e) { console.error(e); } };
-  const handleChangeEmployeeLogin = async (id: number, currentLogin: string) => {
-    const newLogin = window.prompt('Nowy login pracownika:', currentLogin)?.trim();
-    if (!newLogin || newLogin === currentLogin) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}/login`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ login: newLogin })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + (data.message || 'Zmieniono login.'));
-        if (token) fetchEmployees(token);
-      } else {
-        setMessage('❌ ' + (data.error || 'Nie udało się zmienić loginu.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-  const handleChangeEmployeePassword = async (id: number) => {
-    const newPassword = window.prompt('Nowe hasło pracownika (min. 6 znaków):')?.trim();
-    if (!newPassword) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}/password`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ password: newPassword })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + (data.message || 'Zmieniono hasło.'));
-      } else {
-        setMessage('❌ ' + (data.error || 'Nie udało się zmienić hasła.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-  const handleArchiveEmployee = async (id: number) => {
-    if (!window.confirm('Przenieść pracownika do archiwum?')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}/archive`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + (data.message || 'Pracownik zarchiwizowany.'));
-        if (token) fetchEmployees(token);
-      } else {
-        setMessage('❌ ' + (data.error || 'Nie udało się zarchiwizować pracownika.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-  const handleRestoreEmployee = async (id: number) => {
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}/restore`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage('✅ ' + (data.message || 'Pracownik przywrócony.'));
-        if (token) fetchEmployees(token);
-      } else {
-        setMessage('❌ ' + (data.error || 'Nie udało się przywrócić pracownika.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-  const handleDeleteEmployee = async (id: number) => {
-    if (!window.confirm('Usunąć?')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`http://localhost:5000/api/owner/employees/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-      if (res.ok) {
-        if (token) fetchEmployees(token);
-        setMessage('✅ Usunięto.');
-      } else {
-        const err = await res.json();
-        setMessage('❌ ' + (err.error || 'Nie udało się usunąć pracownika.'));
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('❌ Błąd połączenia z serwerem!');
-    }
-  };
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const sessionRaw = localStorage.getItem('sessionUser');
-    if (!token || !sessionRaw) return;
-
-    try {
-      const session = JSON.parse(sessionRaw) as StoredSession;
-      if (!session.firstName || !session.role) return;
-
-      setLoggedInUser(session.firstName);
-      setLoggedInUserLastInitial(
-        typeof session.lastName === 'string' && session.lastName.length > 0
-          ? session.lastName.charAt(0).toUpperCase()
-          : null
-      );
-      setUserRole(session.role);
-      setEmployeeJobRole(session.role === 'employee' ? (session.jobRole || null) : null);
-
-      if (session.role === 'owner') {
-        setActiveTab('cennik');
-        fetchFuels();
-        fetchServices();
-        fetchDeliveries(token);
-        fetchEmployees(token);
-        fetchCustomers(token);
-        fetchLoyaltyConfig(token);
-        } else if (session.role === 'employee') {
-        const role = session.jobRole;
-        if (role === 'Kasjer') {
-          setActiveEmpTab('pos');
-          fetchFuels();
-        } else if (role === 'Monitoring') {
-          setActiveEmpTab('monitoring');
-          fetchMonitoring();
-          } else if (role === 'Obsługa dystrybutora LPG') {
-            setActiveEmpTab('lpg');
-            fetchMonitoring();
-        } else if (role === 'Obsługa Myjni') {
-          setActiveEmpTab('rezerwacje');
-          fetchAllReservations(token);
-        } else {
-          setActiveEmpTab('grafik');
-        }
-      } else if (session.role === 'customer') {
-        fetchCustomerData(token);
-      }
-    } catch (error) {
-      console.error(error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('sessionUser');
-    }
-  }, []);
-
-  const handleDateChange = (val: string, kind: OwnerReportKind = 'sales') => {
-    let fullDate = val;
-    if (val.length === 7) fullDate = `${val}-01`;
-    if (val.length === 4) fullDate = `${val}-01-01`;
-    setReportDateStr(fullDate);
-    if (kind === 'sales') fetchReports(reportPeriod, fullDate);
-    if (kind === 'wash') fetchWashReports(reportPeriod, fullDate);
-    if (kind === 'monitoring') fetchMonitoringReports(reportPeriod, fullDate);
-  };
-
-  const logout = () => { localStorage.clear(); setLoggedInUser(null); setLoggedInUserLastInitial(null); setUserRole(null); setEmployeeJobRole(null); setMessage(''); setStaffData({ login: '', password: '' }); };
-
-  return { message, clearMessage, loggedInUser, loggedInUserLastInitial, userRole, employeeJobRole, activeTab, setActiveTab, activeEmpTab, setActiveEmpTab, activeCustTab, setActiveCustTab, empResDateFilter, setEmpResDateFilter, empResPhoneFilter, setEmpResPhoneFilter, isLogin, setIsLogin, formData, loginMode, setLoginMode, staffData, services, selectedService, setSelectedService, reservationDate, setReservationDate, myReservations, loyaltyPoints, myTransactions, allReservations, fuels, posData, setPosData, posCustomerQuery, setPosCustomerQuery, posVerifiedCustomer, deliveries, newDelivery, newPrice, setNewPrice, newServicePrice, setNewServicePrice, loyaltyConfig, customerWashPointsCost, employees, customers, newEmployee, setNewEmployee, monitoringData, monitoringConfig, reportData, washReportData, monitoringReportData, reportPeriod, setReportPeriod, reportDateStr, scheduleYear, scheduleMonth, scheduleData, selectedScheduleDates, scheduleEmployeeId, setScheduleEmployeeId, scheduleStartTime, setScheduleStartTime, scheduleEndTime, setScheduleEndTime, getMinDateTime, getStatusColor, handleCustomerChange, handleStaffChange, handleDeliveryChange, handlePosChange, handleAuthSubmit, handleVerifyCustomer, handlePOSSubmit, handleReservation, handleCompleteReservation, handleCancelReservation, handleOrderDelivery, handleCompleteDelivery, handleUpdatePrice, handleUpdateServicePrice, handleLoyaltyConfigChange, handleSaveLoyaltyConfig, handleMonitoringConfigChange, handleSaveMonitoringConfig, handleAddEmployee, handleChangeEmployeeLogin, handleChangeEmployeePassword, handleArchiveEmployee, handleRestoreEmployee, handleDeleteEmployee, handleDateChange, fetchMonitoring, fetchReports, fetchWashReports, fetchMonitoringReports, fetchSchedule, changeScheduleMonth, handleScheduleMonthInput, toggleScheduleDate, handleSaveSchedule, handleDeleteScheduleEntry, setSelectedScheduleDates, logout };
 };
+
 export type AppLogic = ReturnType<typeof useAppLogic>;

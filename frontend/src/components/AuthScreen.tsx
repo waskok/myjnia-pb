@@ -54,17 +54,26 @@ export const AuthScreen: React.FC<AppLogic> = (props) => {
               </>
             )}
             <input name="email" type="email" className="input-field" placeholder="E-mail (np. nazwa@domena.pl)" value={formData.email} onChange={handleCustomerChange} required />
-            <input name="password" type="password" className="input-field" placeholder="Hasło" value={formData.password} onChange={handleCustomerChange} required minLength={6} />
+            <input
+              name="password"
+              type="password"
+              className="input-field"
+              placeholder={isLogin ? 'Hasło' : 'Hasło (min. 8 znaków)'}
+              value={formData.password}
+              onChange={handleCustomerChange}
+              required
+              {...(!isLogin ? { minLength: 8 } : {})}
+            />
             {!isLogin && (
               <input
                 name="confirmPassword"
                 type="password"
                 className="input-field"
-                placeholder="Powtórz hasło"
+                placeholder="Powtórz hasło (min. 8 znaków)"
                 value={formData.confirmPassword}
                 onChange={handleCustomerChange}
                 required
-                minLength={6}
+                minLength={8}
               />
             )}
             <button type="submit" className="btn btn-success">{isLogin ? 'Zaloguj' : 'Załóż konto'}</button>

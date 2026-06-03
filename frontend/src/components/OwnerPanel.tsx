@@ -237,7 +237,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
         new Date(b[1][0]?.createdAt ?? '').getTime() - new Date(a[1][0]?.createdAt ?? '').getTime()
     );
 
-    groupEntries.forEach(([_, entries], groupIndex) => {
+    groupEntries.forEach(([, entries], groupIndex) => {
       const groupDate = entries[0]?.createdAt;
       const headerLine = `${groupIndex + 1}. Data i godzina: ${new Date(groupDate).toLocaleString('pl-PL')}`;
       const wrappedHeader = doc.splitTextToSize(toPdfText(headerLine), maxLineWidth);
@@ -516,7 +516,7 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
               <div style={{ flex: 1 }}><label>Imię</label><input className="input-field w-full" required value={newEmployee.firstName} onChange={e => setNewEmployee({...newEmployee, firstName: e.target.value})} /></div>
               <div style={{ flex: 1 }}><label>Nazwisko</label><input className="input-field w-full" required value={newEmployee.lastName} onChange={e => setNewEmployee({...newEmployee, lastName: e.target.value})} /></div>
               <div style={{ flex: 1 }}><label>Login</label><input className="input-field w-full" required value={newEmployee.login} onChange={e => setNewEmployee({...newEmployee, login: e.target.value})} /></div>
-              <div style={{ flex: 1 }}><label>Hasło</label><input type="password" className="input-field w-full" required value={newEmployee.password} onChange={e => setNewEmployee({...newEmployee, password: e.target.value})} /></div>
+              <div style={{ flex: 1 }}><label>Hasło (min. 8 znaków)</label><input type="password" className="input-field w-full" required minLength={8} value={newEmployee.password} onChange={e => setNewEmployee({...newEmployee, password: e.target.value})} /></div>
               <div style={{ flex: 1 }}><label>Rola</label><select className="select-field w-full" value={newEmployee.role} onChange={e => setNewEmployee({...newEmployee, role: e.target.value})}><option>Kasjer</option><option>Monitoring</option><option>Obsługa Myjni</option><option>Obsługa dystrybutora LPG</option></select></div>
               <button type="submit" className="btn btn-success">Dodaj</button>
             </form>

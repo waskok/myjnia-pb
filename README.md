@@ -1,59 +1,153 @@
-# System Obsługi i Monitoringu Stacji Paliw z Myjnią (myjnia-pb)
+# Myjnia-PB — system obsługi stacji paliw z myjnią
 
-Kompleksowa aplikacja webowa typu full-stack, zaprojektowana w architekturze klient-serwer, przeznaczona do automatyzacji procesów biznesowych, obsługi sprzedaży oraz monitorowania infrastruktury technicznej stacji paliw i myjni samochodowej. System wdraża kontrolę dostępu opartą na rolach (RBAC) i oferuje trzy dedykowane moduły: panel klienta, panel pracownika oraz panel właściciela.
+Aplikacja webowa full-stack do obsługi sprzedaży paliw, rezerwacji myjni, programu lojalnościowego, monitoringu zbiorników oraz panelu właściciela. Dostęp oparty na rolach: **klient**, **pracownik** (różne stanowiska), **właściciel**.
 
-## Stos Technologiczny
+## Stos technologiczny
 
-*   **Frontend:** React, TypeScript, Vite, CSS (zmienne CSS, autorski system powiadomień Toast).
-*   **Backend:** Node.js, Express.js, TypeScript.
-*   **Baza danych i ORM:** PostgreSQL, Prisma ORM.
-*   **Autoryzacja i bezpieczeństwo:** JSON Web Tokens (JWT), hashowanie haseł przy użyciu algorytmu bcrypt.
+| Warstwa | Technologie |
+|---------|-------------|
+| Frontend | React 19, TypeScript, Vite, CSS |
+| Backend | Node.js, Express 5, TypeScript |
+| Baza danych | PostgreSQL, Prisma ORM |
+| Bezpieczeństwo | JWT w **HttpOnly** cookies, bcrypt, Zod, express-rate-limit |
 
-## Kluczowe Funkcjonalności Systemu
+## Architektura
 
-### 1. Panel Klienta (Strefa Konsumenta)
-*   **Zarządzanie rezerwacjami:** Możliwość rezerwacji terminów myjni z walidacją uniemożliwiającą wybór dat wstecznych oraz algorytmem wymuszającym zachowanie minimum godzinnego odstępu między operacjami w celu uniknięcia konfliktów.
-*   **Program lojalnościowy:** Moduł naliczania punktów lojalnościowych za zakup paliw oraz usług myjni z bieżącym podglądem stanu konta.
-*   **Ewidencja transakcji:** Wgląd w pełną historię zakupów powiązanych z kontem klienta.
+```
+myjnia-pb/
+├── backend/
+│   ├── prisma/           # schema.prisma, seed.ts
+│   └── src/
+│       ├── middleware/   # authenticate, errorHandler
+│       ├── validators/   # schematy Zod (auth, owner, employee)
+│       └── routes/       # auth, customer, employee, owner
+└── frontend/
+    └── src/
+        ├── components/   # panele UI, cennik publiczny
+        ├── hooks/        # useAuth, useCustomer, useReservations, …
+        └── utils/        # apiClient, pdfGenerator
+```
 
-### 2. Panel Pracownika (Kasa POS & Monitoring)
-*   **Obsługa stanowiska POS:** Rejestracja sprzedaży paliw (E95, E98, Diesel, LPG) z funkcją wyszukiwania klientów w bazie (e-mail/telefon) oraz automatycznym pomniejszaniem stanów magazynowych w zbiornikach.
-*   **Rozliczanie punktowe:** Możliwość finalizacji transakcji poprzez wymianę punktów lojalnościowych klienta na towary/usługi.
-*   **Dokumentowanie sprzedaży:** Automatyczne generowanie faktur VAT dla zarejestrowanych podmiotów gospodarczych.
-*   **Centrum Monitoringu technicznego:** Wyświetlanie rzeczywistych odczytów z sensorów stacji (ciśnienie i temperatura instalacji LPG, poziomy paliw) wraz z systemem powiadomień o stanach krytycznych i awariach kamer CCTV.
-*   **Grafik pracy:** Podgląd indywidualnego harmonogramu zmian przypisanych przez administratora.
+Hook `useAppLogic` jest kompozytorem — łączy wyspecjalizowane hooki i udostępnia jeden interfejs dla `App.tsx` oraz paneli.
 
-### 3. Panel Właściciela (Zarządzanie Biznesem)
-*   **Moduł analityczno-raportowy:** Agregacja danych sprzedażowych (całkowity utarg, liczba transakcji, średnia wartość koszyka) z filtrowaniem w ujęciu dziennym, miesięcznym oraz rocznym.
-*   **Zarządzanie zasobami ludzkimi:** Pełna obsługa procesów CRUD w odniesieniu do kont pracowników (definiowanie ról i uprawnień).
-*   **Planowanie czasu pracy:** Interaktywny kalendarz umożliwiający masowe przypisywanie zmian i godzin startu personelowi.
-*   **Logistyka i zaopatrzenie:** System zlecania i odbioru dostaw paliw, zintegrowany z automatyczną aktualizacją pojemności zbiorników stacji.
+### Backend — skrót API
 
-## Struktura Bazy Danych (Prisma Schema)
+- `POST /api/register`, `/api/login`, `/api/staff/login`, `/api/logout`, `GET /api/me`
+- Klient: usługi, rezerwacje, profil, transakcje, program lojalnościowy (publiczny podgląd)
+- Pracownik: POS, rezerwacje myjni, monitoring, grafik
+- Właściciel: pracownicy, klienci, cennik, dostawy, raporty, grafik, konfiguracja lojalności i monitoringu
 
-Architektura relacyjna bazy danych PostgreSQL uwzględnia optymalizację spójności danych:
-*   Zastosowanie polimorfizmu dla struktury klientów z podziałem na `IndividualCustomer` (weryfikacja PESEL) oraz `CompanyCustomer` (weryfikacja NIP i REGON).
-*   Wdrożenie więzów integralności z mechanizmem kaskadowego usuwania (`onDelete: Cascade`) dla harmonogramów pracy powiązanych z personelem.
-*   Ścisłe powiązanie obiektów transakcji (`Transaction`) z tabelami pozycji szczegółowych (`TransactionItem`) oraz fakturami (`Invoice`).
+### Bezpieczeństwo
 
-## Instrukcja Wdrożenia Lokalnego
+- Token JWT w ciasteczku `HttpOnly` (nie w `localStorage`)
+- CORS z `credentials: true` i `FRONTEND_URL`
+- Walidacja wejścia przez **Zod** (m.in. hasło min. **8** znaków przy rejestracji)
+- Limit logowania: **30** nieudanych prób na 15 minut (`/api/login`, `/api/staff/login`)
+- Middleware `authenticate` + `requireRole` na chronionych endpointach
+- Globalny `errorHandler` dla błędów 500
 
-### Wymagania wstępne
-*   Środowisko uruchomieniowe Node.js (wersja LTS).
-*   Dostęp do instancji bazy danych PostgreSQL.
+## Funkcjonalności
 
-### Instalacja i konfiguracja
-1. Sklonuj repozytorium projektu.
-2. Zainstaluj zależności w katalogach `/backend` oraz `/frontend`:
-   npm install
-3. W katalogu /backend utwórz plik konfiguracji środowiskowej .env na podstawie poniższego szablonu:
-   DATABASE_URL="postgresql://user:password@localhost:5432/dbname?schema=public"
-   JWT_SECRET="your_JWT"
-   PORT="port"
-4. Wykonaj migracje struktur bazodanowych:
-   npx prisma migrate dev
+### Klient
+- Rezerwacja myjni (gotówka lub punkty), historia rezerwacji i zakupów
+- Publiczny cennik i opis programu lojalnościowego bez logowania
 
-### Poświadczenia kont testowych (Seed)
-Do celów weryfikacji i prezentacji systemu wygenerowano następujące konta dostępowe:
-*   **Konto Właściciela:** Login: `szef` | Hasło: `zaq1@WSX`
-*   **Konto Pracownika:** Login: `pracownik1` | Hasło: `zaq1@WSX`
+### Pracownik (role: Kasjer, Obsługa Myjni, Monitoring, Obsługa dystrybutora LPG)
+- Kasa POS: paliwa, punkty, faktury PDF
+- Zarządzanie rezerwacjami myjni
+- Monitoring zbiorników i LPG
+- Podgląd grafiku
+
+### Właściciel
+- Cennik paliw i usług myjni, program lojalnościowy
+- Pracownicy (CRUD, archiwizacja), klienci, dostawy paliw
+- Raporty sprzedaży, myjni i monitoringu
+- Grafik pracowników
+
+## Wymagania
+
+- Node.js (LTS)
+- PostgreSQL
+
+## Uruchomienie lokalne
+
+### 1. Zależności
+
+```bash
+cd backend && npm install
+cd ../frontend && npm install
+```
+
+### 2. Zmienne środowiskowe
+
+**`backend/.env`** (wzór: `backend/.env.example`):
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/myjnia_pb?schema=public"
+JWT_SECRET="twoj-losowy-sekret-jwt"
+PORT=5000
+NODE_ENV=development
+FRONTEND_URL="http://localhost:5173"
+```
+
+**`frontend/.env`** (wzór: `frontend/.env.example`):
+
+```env
+VITE_API_URL=http://localhost:5000
+```
+
+### 3. Baza danych
+
+```bash
+cd backend
+npx prisma migrate dev
+npx prisma db seed
+```
+
+Seed tworzy m.in. właściciela, 3 pracowników, 5 klientów, cennik paliw, usługi myjni, przykładowe rezerwacje i transakcje POS.
+
+### 4. Start aplikacji
+
+```bash
+# terminal 1 — backend
+cd backend
+npm run dev
+
+# terminal 2 — frontend
+cd frontend
+npm run dev
+```
+
+Frontend: [http://localhost:5173](http://localhost:5173)  
+Backend: [http://localhost:5000](http://localhost:5000)
+
+### Skrypty pomocnicze
+
+| Katalog | Polecenie | Opis |
+|---------|-----------|------|
+| backend | `npm run dev` | Serwer z hot-reload (tsx) |
+| backend | `npm run build` | Kompilacja TypeScript |
+| frontend | `npm run dev` | Vite dev server |
+| frontend | `npm run build` | Build produkcyjny |
+| frontend | `npm run lint` | ESLint |
+
+## Konta testowe (po seedzie)
+
+| Rola | Login / e-mail | Hasło |
+|------|----------------|-------|
+| Właściciel | `owner` | `Admin1234!` |
+| Kasjer | `kasjer01` | `Pracownik1!` |
+| Obsługa myjni | `myjnia01` | `Pracownik1!` |
+| Obsługa LPG | `lpg01` | `Pracownik1!` |
+| Klient | `piotr.kowalczyk@example.pl` | `Klient1234!` |
+
+Dodatkowi klienci z seeda: `kasia.lewandowska@example.pl`, `michal.dabrowski@example.pl`, `biuro@autoflota.pl`, `kontakt@transportmax.pl` — hasło: `Klient1234!`
+
+## Baza danych (Prisma)
+
+- Klienci: osoba fizyczna (`IndividualCustomer`) lub firma (`CompanyCustomer`)
+- Transakcje z pozycjami (`TransactionItem`) i opcjonalnymi fakturami (`Invoice`)
+- Monitoring: odczyty sensorów, konfiguracja progów, symulator próbkowania
+- Grafik: `WorkSchedule` powiązany z właścicielem i pracownikiem
+
+Szczegóły modeli: `backend/prisma/schema.prisma`.

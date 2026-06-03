@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Fuel, WashService } from '../types';
+import { api } from '../utils/apiClient';
 
 type PublicLoyaltyProgram = {
   pointsPerE95: number;
@@ -37,9 +38,9 @@ export function PublicLoyaltyProgramPage() {
       setError('');
       try {
         const [fuelsRes, servicesRes, loyaltyRes] = await Promise.all([
-          fetch('http://localhost:5000/api/fuels'),
-          fetch('http://localhost:5000/api/services'),
-          fetch('http://localhost:5000/api/loyalty-program'),
+          api.get('/api/fuels'),
+          api.get('/api/services'),
+          api.get('/api/loyalty-program'),
         ]);
 
         const fuelsJson = await fuelsRes.json();
