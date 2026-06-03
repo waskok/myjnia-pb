@@ -84,7 +84,7 @@ router.post('/login', async (req, res) => {
   if (!isPasswordValid) return res.status(401).json({ error: 'Nieprawidłowy e-mail lub hasło!' });
 
   const token = jwt.sign(
-    { id: user.id, email: user.email },
+    { id: user.id, email: user.email, role: 'customer' },
     process.env.JWT_SECRET as string,
     { expiresIn: '2h' },
   );
@@ -92,7 +92,7 @@ router.post('/login', async (req, res) => {
   res.cookie('token', token, { ...COOKIE_OPTIONS, maxAge: 2 * 60 * 60 * 1000 });
   res.status(200).json({
     message: 'Zalogowano pomyślnie!',
-    user: { firstName: user.firstName, lastName: user.lastName },
+    user: { firstName: user.firstName, lastName: user.lastName, role: 'customer' },
   });
 });
 
