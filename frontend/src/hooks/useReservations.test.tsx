@@ -14,6 +14,11 @@ const services: WashService[] = [
   { id: 1, type: 'Mycie standardowe', price: 39, loyaltyPoints: 5 },
 ];
 
+const availabilitySlots = [
+  { time: '10:00', available: true },
+  { time: '10:15', available: false },
+];
+
 function useReservationsHarness(loyaltyPoints = 450) {
   const setMessage = vi.fn();
   const onSuccess = vi.fn();
@@ -48,12 +53,26 @@ describe('useReservations', () => {
     expect(result.current.selectedService).toBe('1');
   });
 
+  it('pobiera dostępne godziny dla wybranej daty', async () => {
+    vi.mocked(api.get).mockResolvedValue(jsonResponse(true, { slots: availabilitySlots }));
+
+    const { result } = useReservationsHarness();
+
+    await act(async () => {
+      await result.current.fetchAvailability('2030-12-20');
+    });
+
+    expect(api.get).toHaveBeenCalledWith('/api/reservations/availability?date=2030-12-20');
+    expect(result.current.availableSlots).toEqual(availabilitySlots);
+  });
+
   it('odrzuca rezerwację w przeszłości', async () => {
     const { result, setMessage } = useReservationsHarness();
 
     act(() => {
       result.current.setSelectedService('1');
-      result.current.setReservationDate('2020-06-01T10:00');
+      result.current.handleReservationDayChange('2020-06-01');
+      result.current.setReservationTime('10:00');
     });
 
     await act(async () => {
@@ -71,7 +90,8 @@ describe('useReservations', () => {
 
     act(() => {
       result.current.setSelectedService('points:1:300');
-      result.current.setReservationDate('2030-12-20T10:00');
+      result.current.handleReservationDayChange('2030-12-20');
+      result.current.setReservationTime('10:00');
     });
 
     await act(async () => {
@@ -90,7 +110,8 @@ describe('useReservations', () => {
 
     act(() => {
       result.current.setSelectedService('1');
-      result.current.setReservationDate('2030-12-21T10:00');
+      result.current.handleReservationDayChange('2030-12-21');
+      result.current.setReservationTime('10:00');
     });
 
     await act(async () => {
@@ -111,7 +132,8 @@ describe('useReservations', () => {
 
     act(() => {
       result.current.setSelectedService('1');
-      result.current.setReservationDate('2030-12-22T11:00');
+      result.current.handleReservationDayChange('2030-12-22');
+      result.current.setReservationTime('11:00');
     });
 
     await act(async () => {
@@ -124,6 +146,7 @@ describe('useReservations', () => {
       '/api/reservations',
       expect.objectContaining({
         washServiceId: 1,
+        date: '2030-12-22T11:00',
         paymentMode: 'cash',
       }),
     );
@@ -136,7 +159,8 @@ describe('useReservations', () => {
 
     act(() => {
       result.current.setSelectedService('');
-      result.current.setReservationDate('2030-12-23T10:00');
+      result.current.handleReservationDayChange('2030-12-23');
+      result.current.setReservationTime('10:00');
     });
 
     await act(async () => {
@@ -146,5 +170,22 @@ describe('useReservations', () => {
     });
 
     expect(setMessage).toHaveBeenCalledWith('❌ Wybierz wariant rezerwacji.');
+  });
+
+  it('odrzuca gdy nie wybrano godziny', async () => {
+    const { result, setMessage } = useReservationsHarness();
+
+    act(() => {
+      result.current.setSelectedService('1');
+      result.current.handleReservationDayChange('2030-12-23');
+    });
+
+    await act(async () => {
+      await result.current.handleReservation({
+        preventDefault: vi.fn(),
+      } as unknown as React.FormEvent);
+    });
+
+    expect(setMessage).toHaveBeenCalledWith('❌ Wybierz godzinę rezerwacji.');
   });
 });

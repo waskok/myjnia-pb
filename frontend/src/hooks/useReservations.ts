@@ -1,6 +1,10 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import { api } from '../utils/apiClient';
 import type { WashService, Reservation } from '../types';
+import {
+  combineReservationDateTime,
+  type ReservationSlot,
+} from '../utils/reservationSlots';
 
 export const useReservations = (
   setMessage: (msg: string) => void,
@@ -9,7 +13,10 @@ export const useReservations = (
   onReservationSuccess: () => void,
 ) => {
   const [selectedService, setSelectedService] = useState('');
-  const [reservationDate, setReservationDate] = useState('');
+  const [reservationDay, setReservationDay] = useState('');
+  const [reservationTime, setReservationTime] = useState('');
+  const [availableSlots, setAvailableSlots] = useState<ReservationSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
 
   const fetchServices = async () => {
@@ -26,6 +33,38 @@ export const useReservations = (
     if (res.ok) setMyReservations((await res.json()) as Reservation[]);
   };
 
+  const fetchAvailability = useCallback(async (day: string) => {
+    if (!day) {
+      setAvailableSlots([]);
+      return;
+    }
+
+    setSlotsLoading(true);
+    try {
+      const res = await api.get(`/api/reservations/availability?date=${encodeURIComponent(day)}`);
+      if (res.ok) {
+        const data = (await res.json()) as { slots: ReservationSlot[] };
+        setAvailableSlots(data.slots);
+        setReservationTime((current) => {
+          if (!current) return current;
+          const slot = data.slots.find((entry) => entry.time === current);
+          return slot?.available ? current : '';
+        });
+      } else {
+        setAvailableSlots([]);
+        const data = (await res.json()) as { error?: string };
+        setMessage(`❌ ${data.error ?? 'Nie udało się pobrać dostępnych godzin.'}`);
+      }
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, [setMessage]);
+
+  const handleReservationDayChange = (day: string) => {
+    setReservationDay(day);
+    setReservationTime('');
+  };
+
   const handleReservation = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -33,8 +72,25 @@ export const useReservations = (
       setMessage('❌ Wybierz wariant rezerwacji.');
       return;
     }
+    if (!reservationDay) {
+      setMessage('❌ Wybierz datę rezerwacji.');
+      return;
+    }
+    if (!reservationTime) {
+      setMessage('❌ Wybierz godzinę rezerwacji.');
+      return;
+    }
+
+    const reservationDate = combineReservationDateTime(reservationDay, reservationTime);
     if (new Date(reservationDate).getTime() < Date.now()) {
       setMessage('❌ Nie można rezerwować terminów w przeszłości.');
+      return;
+    }
+
+    const selectedSlot = availableSlots.find((slot) => slot.time === reservationTime);
+    if (selectedSlot && !selectedSlot.available) {
+      setMessage('❌ Wybrany termin jest już zajęty. Odśwież listę godzin.');
+      void fetchAvailability(reservationDay);
       return;
     }
 
@@ -72,20 +128,30 @@ export const useReservations = (
     const data = (await res.json()) as { message?: string; error?: string };
     if (res.ok) {
       setMessage('✅ ' + (data.message ?? 'Złożono rezerwację.'));
-      setReservationDate('');
+      setReservationDay('');
+      setReservationTime('');
+      setAvailableSlots([]);
       setSelectedService('');
       await fetchMyReservations();
       onReservationSuccess();
     } else {
       setMessage('❌ ' + (data.error ?? 'Błąd rezerwacji.'));
+      if (reservationDay) {
+        void fetchAvailability(reservationDay);
+      }
     }
   };
 
   return {
     selectedService,
     setSelectedService,
-    reservationDate,
-    setReservationDate,
+    reservationDay,
+    reservationTime,
+    setReservationTime,
+    availableSlots,
+    slotsLoading,
+    handleReservationDayChange,
+    fetchAvailability,
     myReservations,
     fetchServices,
     fetchMyReservations,
