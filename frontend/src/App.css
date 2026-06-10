@@ -340,6 +340,42 @@ html, body, #root {
   opacity: 1;
 }
 
+.time-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.time-slot-btn {
+  border: 1px solid #bfd0e6;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text-main);
+  padding: 10px 8px;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.time-slot-btn:hover:not(:disabled) {
+  border-color: var(--primary-strong);
+}
+
+.time-slot-selected {
+  border-color: var(--primary-strong);
+  background: rgb(37 99 235 / 0.12);
+  color: var(--primary-strong);
+  font-weight: 600;
+}
+
+.time-slot-unavailable {
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+}
+
 .phone-input-wrap {
   display: flex;
   align-items: center;

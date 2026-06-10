@@ -5,6 +5,7 @@ import prisma from '../../prismaClient.js';
 import { isApiTestDbConfigured } from '../env.js';
 import {
   futureReservationIso,
+  resetReservationSlots,
   loginCustomer,
   loginEmployee,
   loginOwner,
@@ -17,6 +18,7 @@ const runApiTests = isApiTestDbConfigured();
 
 describe.skipIf(!runApiTests)('Employee API — POS i myjnia', () => {
   beforeAll(async () => {
+    resetReservationSlots();
     await prisma.reservation.deleteMany({
       where: { date: { gte: new Date('2030-01-01T00:00:00.000Z') } },
     });
@@ -110,12 +112,14 @@ describe.skipIf(!runApiTests)('Employee API — POS i myjnia', () => {
     const customerAgent = await loginCustomer(app);
     const services = await request(app).get('/api/services').expect(200);
     const washServiceId = services.body[0].id;
+    const dateTime = futureReservationIso();
+    const expectedMs = new Date(dateTime).getTime();
 
     await customerAgent
       .post('/api/reservations')
       .send({
         washServiceId,
-        date: futureReservationIso(),
+        date: dateTime,
         paymentMode: 'cash',
       })
       .expect(201);
@@ -123,7 +127,8 @@ describe.skipIf(!runApiTests)('Employee API — POS i myjnia', () => {
     const myjnia = await loginEmployee(app, SEED_MYJNIA);
     const list = await myjnia.get('/api/employee/reservations').expect(200);
     const pending = list.body.find(
-      (r: { status: string; date: string }) => r.status === 'Oczekująca',
+      (r: { status: string; date: string }) =>
+        r.status === 'Oczekująca' && new Date(r.date).getTime() === expectedMs,
     );
     expect(pending).toBeDefined();
 

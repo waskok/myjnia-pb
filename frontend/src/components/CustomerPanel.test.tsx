@@ -11,9 +11,13 @@ function panelProps(overrides: Partial<AppLogic> = {}): AppLogic {
     setSelectedService: vi.fn(),
     services: [{ id: 1, type: 'Mycie standardowe', price: 39, loyaltyPoints: 5 }],
     customerWashPointsCost: { standard: 300, wax: 400 },
-    reservationDate: '',
-    getMinDateTime: () => '2030-01-01T00:00',
-    setReservationDate: vi.fn(),
+    reservationDay: '',
+    reservationTime: '',
+    setReservationTime: vi.fn(),
+    availableSlots: [],
+    slotsLoading: false,
+    handleReservationDayChange: vi.fn(),
+    fetchAvailability: vi.fn(),
     myReservations: [
       {
         id: 1,

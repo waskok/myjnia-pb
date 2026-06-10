@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../createApp.js';
 import { isApiTestDbConfigured } from '../env.js';
-import { futureReservationIso, loginOwner } from './helpers.js';
+import { loginOwner } from './helpers.js';
 
 const app = createApp({ rateLimit: false });
 const runApiTests = isApiTestDbConfigured();

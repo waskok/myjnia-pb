@@ -1,6 +1,14 @@
 import { Router } from 'express';
 import prisma from '../prismaClient.js';
 import { authenticate } from '../middleware/authenticate.js';
+import {
+  ACTIVE_RESERVATION_STATUS,
+  buildAvailabilitySlots,
+  getDayBounds,
+  hasReservationConflict,
+  isAllowedSlotTime,
+  isValidReservationDate,
+} from '../utils/reservationSlots.js';
 
 const router = Router();
 
@@ -101,6 +109,29 @@ router.get('/loyalty-program', async (_req, res) => {
   });
 });
 
+router.get('/reservations/availability', async (req, res) => {
+  const date = typeof req.query.date === 'string' ? req.query.date : '';
+  if (!isValidReservationDate(date)) {
+    return res.status(400).json({ error: 'Nieprawidłowa data. Użyj formatu RRRR-MM-DD.' });
+  }
+
+  const { start, end } = getDayBounds(date);
+  const reservations = await prisma.reservation.findMany({
+    where: {
+      status: ACTIVE_RESERVATION_STATUS,
+      date: { gte: start, lte: end },
+    },
+    select: { date: true },
+  });
+
+  const slots = buildAvailabilitySlots(
+    date,
+    reservations.map((reservation) => reservation.date),
+  );
+
+  res.json({ slots });
+});
+
 router.post('/reservations', authenticate, async (req, res) => {
   const { washServiceId, date, paymentMode, pointsCost } = req.body as {
     washServiceId?: number | string;
@@ -121,20 +152,30 @@ router.post('/reservations', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'Nie można rezerwować terminów w przeszłości!' });
   }
 
-  const oneHourBefore = new Date(reservationDate.getTime() - 60 * 60 * 1000);
-  const oneHourAfter = new Date(reservationDate.getTime() + 60 * 60 * 1000);
+  const timePart = `${String(reservationDate.getHours()).padStart(2, '0')}:${String(reservationDate.getMinutes()).padStart(2, '0')}`;
+  if (!isAllowedSlotTime(timePart)) {
+    return res.status(400).json({
+      error: 'Nieprawidłowa godzina rezerwacji. Wybierz dostępny termin co 15 minut (8:00–22:00).',
+    });
+  }
 
-  const conflict = await prisma.reservation.findFirst({
+  const dayPart = date.split('T')[0] ?? '';
+  const { start, end } = getDayBounds(dayPart);
+  const sameDayReservations = await prisma.reservation.findMany({
     where: {
-      status: { not: 'Anulowana' },
-      date: { gt: oneHourBefore, lt: oneHourAfter },
+      status: ACTIVE_RESERVATION_STATUS,
+      date: { gte: start, lte: end },
     },
+    select: { date: true },
   });
 
-  if (conflict) {
-    return res
-      .status(400)
-      .json({ error: 'Termin zajęty! Pomiędzy rezerwacjami musi być minimum godzina odstępu.' });
+  if (
+    hasReservationConflict(
+      reservationDate,
+      sameDayReservations.map((reservation) => reservation.date),
+    )
+  ) {
+    return res.status(400).json({ error: 'Termin zajęty! Wybierz inną godzinę.' });
   }
 
   const customerId = req.user!.id;

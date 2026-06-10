@@ -1,8 +1,50 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { AppLogic } from '../hooks/useAppLogic';
+import { getMinReservationDate } from '../utils/reservationSlots';
 
 export const CustomerPanel: React.FC<AppLogic> = (props) => {
-  const { activeCustTab, handleReservation, selectedService, setSelectedService, services, customerWashPointsCost, reservationDate, getMinDateTime, setReservationDate, myReservations, getStatusColor, myTransactions } = props;
+  const {
+    activeCustTab,
+    handleReservation,
+    selectedService,
+    setSelectedService,
+    services,
+    customerWashPointsCost,
+    reservationDay,
+    reservationTime,
+    setReservationTime,
+    availableSlots,
+    slotsLoading,
+    handleReservationDayChange,
+    fetchAvailability,
+    myReservations,
+    getStatusColor,
+    myTransactions,
+  } = props;
+
+  useEffect(() => {
+    if (activeCustTab !== 'book' || !reservationDay) return;
+    void fetchAvailability(reservationDay);
+  }, [activeCustTab, reservationDay, fetchAvailability]);
+
+  useEffect(() => {
+    if (activeCustTab !== 'book' || !reservationDay) return;
+
+    const refreshSlots = () => {
+      void fetchAvailability(reservationDay);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshSlots();
+    };
+
+    window.addEventListener('focus', refreshSlots);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', refreshSlots);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeCustTab, reservationDay, fetchAvailability]);
 
   const getBadgeClass = (status: string) => {
     const normalized = status.toLowerCase();
@@ -33,9 +75,39 @@ export const CustomerPanel: React.FC<AppLogic> = (props) => {
                 </React.Fragment>
               ))}
             </select>
-            <label className="mt-10">Data i godzina rezerwacji:</label>
-            <input type="datetime-local" className="input-field" value={reservationDate} min={getMinDateTime()} onChange={(e) => setReservationDate(e.target.value)} required />
-            <button type="submit" className="btn btn-success mt-10 w-auto">Potwierdź rezerwację</button>
+            <label className="mt-10">Data rezerwacji:</label>
+            <input
+              type="date"
+              className="input-field"
+              value={reservationDay}
+              min={getMinReservationDate()}
+              onChange={(e) => handleReservationDayChange(e.target.value)}
+              required
+            />
+            <label className="mt-10">Godzina rezerwacji:</label>
+            {!reservationDay && (
+              <p className="text-muted" style={{ margin: '8px 0 0' }}>Najpierw wybierz datę, aby zobaczyć wolne godziny.</p>
+            )}
+            {reservationDay && slotsLoading && (
+              <p className="text-muted" style={{ margin: '8px 0 0' }}>Ładowanie dostępnych godzin…</p>
+            )}
+            {reservationDay && !slotsLoading && (
+              <div className="time-slot-grid" role="group" aria-label="Wybierz godzinę rezerwacji">
+                {availableSlots.map((slot) => (
+                  <button
+                    key={slot.time}
+                    type="button"
+                    className={`time-slot-btn${reservationTime === slot.time ? ' time-slot-selected' : ''}${!slot.available ? ' time-slot-unavailable' : ''}`}
+                    disabled={!slot.available}
+                    aria-pressed={reservationTime === slot.time}
+                    onClick={() => setReservationTime(slot.time)}
+                  >
+                    {slot.time}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button type="submit" className="btn btn-success mt-10 w-auto" disabled={!reservationDay || !reservationTime}>Potwierdź rezerwację</button>
             <p className="text-muted mt-10" style={{ lineHeight: 1.5 }}>
               W celu anulowania rezerwacji prosimy o kontakt telefoniczny z pracownikiem stacji pod numerem +48 123 456 789.
               <br />
