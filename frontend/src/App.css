@@ -335,6 +335,11 @@ html, body, #root {
   box-shadow: 0 0 0 3px rgb(37 99 235 / 0.16);
 }
 
+.input-field::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
 .phone-input-wrap {
   display: flex;
   align-items: center;

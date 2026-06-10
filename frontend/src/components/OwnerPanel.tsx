@@ -450,7 +450,14 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
                     <p className="item-meta">Aktualna cena: {f.pricePerLiter} zł/L</p>
                   </div>
                   <div className="row-actions">
-                    <input type="number" step="0.01" className="input-field" value={newPrice[f.id] || ''} onChange={(e) => setNewPrice({ ...newPrice, [f.id]: parseFloat(e.target.value) })} />
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input-field"
+                      placeholder={`${f.pricePerLiter.toFixed(2)} zł/L`}
+                      value={newPrice[f.id] ?? ''}
+                      onChange={(e) => setNewPrice({ ...newPrice, [f.id]: parseFloat(e.target.value) })}
+                    />
                     <button onClick={() => handleUpdatePrice(f.id)} className="btn btn-success">Zmień</button>
                   </div>
                 </article>
@@ -466,7 +473,14 @@ export const OwnerPanel: React.FC<AppLogic> = (props) => {
                     <p className="item-meta">Aktualna cena: {service.price.toFixed(2)} zł</p>
                   </div>
                   <div className="row-actions">
-                    <input type="number" step="0.01" className="input-field" value={newServicePrice[service.id] || ''} onChange={(e) => setNewServicePrice({ ...newServicePrice, [service.id]: parseFloat(e.target.value) })} />
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input-field"
+                      placeholder={`${service.price.toFixed(2)} zł`}
+                      value={newServicePrice[service.id] ?? ''}
+                      onChange={(e) => setNewServicePrice({ ...newServicePrice, [service.id]: parseFloat(e.target.value) })}
+                    />
                     <button onClick={() => handleUpdateServicePrice(service.id)} className="btn btn-success">Zmień</button>
                   </div>
                 </article>
